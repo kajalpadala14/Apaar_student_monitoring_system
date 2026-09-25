@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Official Government Style Emblem / Seal Icon -->
+  <circle cx="50" cy="50" r="46" fill="#1e3a8a" stroke="#d97706" stroke-width="3" />
+  <circle cx="50" cy="50" r="41" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-dasharray="2 2" />
+  
+  <!-- Ashoka Chakra Spokes Motif -->
+  <circle cx="50" cy="50" r="16" fill="#ffffff" />
+  <circle cx="50" cy="50" r="14" fill="#1e3a8a" />
+  <circle cx="50" cy="50" r="4" fill="#ffffff" />
+  
+  <!-- Center symbol: Education & Digital Identity book and student -->
+  <path d="M50 38 L32 46 L50 54 L68 46 Z" fill="#f59e0b" />
+  <path d="M40 50 L40 58 Q50 63 60 58 L60 50" fill="none" stroke="#f59e0b" stroke-width="2.5" />
+  <circle cx="50" cy="30" r="4" fill="#ffffff" />
+  
+  <!-- Ribbon / Banner Motif at bottom -->
+  <path d="M26 74 Q50 82 74 74 L78 80 Q50 88 22 80 Z" fill="#d97706" />
+  <text x="50" y="81" font-family="sans-serif" font-size="5" font-weight="bold" fill="#ffffff" text-anchor="middle" letter-spacing="1">DANTEWADA</text>
+  <text x="50" y="20" font-family="sans-serif" font-size="5.5" font-weight="bold" fill="#f8fafc" text-anchor="middle" letter-spacing="0.5">GOVT. OF CHHATTISGARH</text>
+</svg>
