@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock, Database, Menu, CheckCircle2, FileSpreadsheet } from 'lucide-react';
+import { Clock, Database, Menu, CheckCircle2, RefreshCw } from 'lucide-react';
 
 interface HeaderProps {
   lastUpdated: string;
@@ -11,8 +11,9 @@ interface HeaderProps {
   drillDownBlock?: string;
   drillDownSchool?: string;
   onClearDrillDown?: (level: 'district' | 'block') => void;
-  isSheetConnected?: boolean;
-  onOpenGoogleSheetModal?: () => void;
+  isSheetConfigured?: boolean;
+  isSyncing?: boolean;
+  onSyncSheet?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -25,8 +26,9 @@ export const Header: React.FC<HeaderProps> = ({
   drillDownBlock,
   drillDownSchool,
   onClearDrillDown,
-  isSheetConnected,
-  onOpenGoogleSheetModal
+  isSheetConfigured,
+  isSyncing,
+  onSyncSheet
 }) => {
   return (
     <header className="bg-slate-900 text-white border-b border-slate-800 shadow-sm sticky top-0 z-40">
@@ -78,21 +80,26 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right: Data indicator + Status + Google Sheet Sync */}
         <div className="flex items-center gap-2.5 sm:gap-4 ml-auto">
-          {/* Google Sheet Live Connection Button */}
-          {onOpenGoogleSheetModal && (
+          {/* Direct Live Sheet Sync Button */}
+          {onSyncSheet && (
             <button
-              onClick={onOpenGoogleSheetModal}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer ${
-                isSheetConnected
+              onClick={onSyncSheet}
+              disabled={isSyncing}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer disabled:opacity-60 ${
+                isSheetConfigured
                   ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700/80 hover:bg-emerald-900'
-                  : 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700 hover:text-white'
+                  : 'bg-amber-950/80 text-amber-300 border-amber-700/80 hover:bg-amber-900'
               }`}
-              title="Connect and sync with Google Sheet online"
+              title={isSheetConfigured ? 'Click to re-sync latest records directly from Google Sheet (.env)' : 'Configure VITE_GOOGLE_APPS_SCRIPT_URL in .env'}
             >
-              <FileSpreadsheet className={`w-3.5 h-3.5 ${isSheetConnected ? 'text-emerald-400' : 'text-slate-400'}`} />
-              <span className="hidden sm:inline">{isSheetConnected ? 'Sheet Connected' : 'Connect Sheet'}</span>
-              <span className="sm:hidden">{isSheetConnected ? 'Sheet' : 'Sync'}</span>
-              {isSheetConnected && (
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-emerald-400' : isSheetConfigured ? 'text-emerald-400' : 'text-amber-400'}`} />
+              <span className="hidden sm:inline">
+                {isSyncing ? 'Syncing...' : isSheetConfigured ? 'Sync Live Sheet' : 'Configure .env'}
+              </span>
+              <span className="sm:hidden">
+                {isSyncing ? 'Syncing' : 'Sync'}
+              </span>
+              {isSheetConfigured && !isSyncing && (
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
               )}
             </button>

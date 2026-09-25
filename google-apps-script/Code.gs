@@ -47,12 +47,22 @@ function doGet(e) {
     
     // Helper to find column index case-insensitively
     function findCol(keywords) {
-      for (let i = 0; i < rawHeaders.length; i++) {
-        const headerLower = rawHeaders[i].toLowerCase();
-        for (let j = 0; j < keywords.length; j++) {
-          if (headerLower.indexOf(keywords[j].toLowerCase()) !== -1) {
-            return i;
+      // First pass: exact header match
+      for (let k = 0; k < keywords.length; k++) {
+        const kw = keywords[k].toLowerCase();
+        for (let i = 0; i < rawHeaders.length; i++) {
+          if (rawHeaders[i].toLowerCase() === kw) return i;
+        }
+      }
+      // Second pass: substring match with exclusions
+      for (let k = 0; k < keywords.length; k++) {
+        const kw = keywords[k].toLowerCase();
+        for (let i = 0; i < rawHeaders.length; i++) {
+          const h = rawHeaders[i].toLowerCase();
+          if (kw === 'name' && (h.includes('state') || h.includes('district') || h.includes('block') || h.includes('school'))) {
+            continue;
           }
+          if (h.indexOf(kw) !== -1) return i;
         }
       }
       return -1;

@@ -26,9 +26,8 @@ import { StudentDetailsView } from './components/views/StudentDetailsView';
 import { PendingApaarView } from './components/views/PendingApaarView';
 import { ReportsView } from './components/views/ReportsView';
 import { SchoolDetailModal } from './components/views/SchoolDetailModal';
-import { GoogleSheetSyncModal } from './components/modals/GoogleSheetSyncModal';
 import { exportToExcel, exportToCSV, exportDistrictSummaryPDF } from './lib/export';
-import { RefreshCw, Database, FileSpreadsheet } from 'lucide-react';
+import { RefreshCw, Database, FileSpreadsheet, CheckCircle2, AlertCircle } from 'lucide-react';
 
 export function App() {
   const [loading, setLoading] = useState(true);
@@ -58,16 +57,21 @@ export function App() {
     new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
   );
 
-  // Google Sheet Integration State
-  const [isSheetModalOpen, setIsSheetModalOpen] = useState(false);
-  const [googleSheetUrl, setGoogleSheetUrl] = useState<string>(
-    () => localStorage.getItem('apaar_sheet_url') || import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL || ''
-  );
+  // Google Sheet Integration via .env
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncFeedback, setSyncFeedback] = useState<{ message: string; error?: boolean } | null>(null);
+  const googleSheetUrl = import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL || '';
   const [lastSyncedTime, setLastSyncedTime] = useState<string | null>(
     () => localStorage.getItem('apaar_sheet_last_synced') || null
   );
 
-  const handleSyncGoogleSheet = async (scriptUrl: string) => {
+  const handleSyncGoogleSheet = async (scriptUrl = googleSheetUrl) => {
+    if (!scriptUrl) {
+      setSyncFeedback({ message: 'VITE_GOOGLE_APPS_SCRIPT_URL is not configured in .env file', error: true });
+      return { success: false, message: 'Missing VITE_GOOGLE_APPS_SCRIPT_URL' };
+    }
+    setIsSyncing(true);
+    setSyncFeedback(null);
     try {
       const response = await fetch(scriptUrl, {
         method: 'GET',
@@ -95,29 +99,25 @@ export function App() {
         hour: '2-digit',
         minute: '2-digit'
       });
-      localStorage.setItem('apaar_sheet_url', scriptUrl);
       localStorage.setItem('apaar_sheet_last_synced', now);
-      setGoogleSheetUrl(scriptUrl);
       setLastSyncedTime(now);
 
       const allStudents = await db.students.toArray();
       setStudents(allStudents);
       setLastUpdated(now);
+      setSyncFeedback({ message: `Successfully synced ${data.students.length.toLocaleString()} records from Google Sheet!` });
+      setTimeout(() => setSyncFeedback(null), 5000);
       return { success: true, total: data.students.length };
     } catch (err: any) {
       console.error('Error syncing Google Sheet:', err);
+      setSyncFeedback({ message: err.message || 'Failed to sync with Google Sheet', error: true });
       return { success: false, message: err.message || 'Failed to sync with Google Sheet' };
+    } finally {
+      setIsSyncing(false);
     }
   };
 
-  const handleDisconnectSheet = () => {
-    localStorage.removeItem('apaar_sheet_url');
-    localStorage.removeItem('apaar_sheet_last_synced');
-    setGoogleSheetUrl('');
-    setLastSyncedTime(null);
-  };
-
-  // Load database and seed initial data
+  // Load database
   const loadData = useCallback(async () => {
     try {
       const allStudents = await db.students.toArray();
@@ -131,19 +131,19 @@ export function App() {
   useEffect(() => {
     async function boot() {
       try {
-        const storedUrl = localStorage.getItem('apaar_sheet_url') || import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL;
-        if (storedUrl) {
-          setInitMessage('Connecting and syncing with Google Sheet...');
-          const syncRes = await handleSyncGoogleSheet(storedUrl);
+        if (googleSheetUrl) {
+          setInitMessage('Connecting and syncing with Google Sheet from .env...');
+          const syncRes = await handleSyncGoogleSheet(googleSheetUrl);
           if (syncRes.success) {
             setLoading(false);
             return;
           }
+        } else {
+          // If no sheet URL configured in .env, ensure local DB is empty
+          await db.students.clear();
+          setStudents([]);
         }
-        await initializeDatabase((progress, message) => {
-          setInitProgress(progress);
-          setInitMessage(message);
-        });
+        await initializeDatabase();
         await loadData();
       } catch (e) {
         console.error('Boot error:', e);
@@ -346,9 +346,26 @@ export function App() {
         drillDownBlock={filter.block}
         drillDownSchool={filter.school}
         onClearDrillDown={handleClearDrillDown}
-        isSheetConnected={Boolean(googleSheetUrl)}
-        onOpenGoogleSheetModal={() => setIsSheetModalOpen(true)}
+        isSheetConfigured={Boolean(googleSheetUrl)}
+        isSyncing={isSyncing}
+        onSyncSheet={() => handleSyncGoogleSheet()}
       />
+
+      {/* Real-time Sync Feedback Notification */}
+      {syncFeedback && (
+        <div className={`px-4 py-2 text-xs font-semibold flex items-center justify-center gap-2 border-b ${
+          syncFeedback.error
+            ? 'bg-rose-50 text-rose-800 border-rose-200'
+            : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+        }`}>
+          {syncFeedback.error ? (
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+          ) : (
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          )}
+          <span>{syncFeedback.message}</span>
+        </div>
+      )}
 
       {/* Main Body */}
       <div className="flex flex-1 overflow-hidden">
@@ -372,20 +389,33 @@ export function App() {
                   <FileSpreadsheet className="w-7 h-7" />
                 </div>
                 <div>
-                  <h3 className="text-base sm:text-lg font-bold text-slate-900">Google Sheet Connection Required</h3>
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900">
+                    {googleSheetUrl ? 'Google Sheet Live Synchronization' : 'Google Sheet URL Not Configured'}
+                  </h3>
                   <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto leading-relaxed">
-                    No student records are currently loaded in the dashboard. Connect your online Google Sheet using Apps Script Web App to sync and monitor student records in real time.
+                    {googleSheetUrl ? (
+                      <>
+                        Dashboard is connected to Google Sheet via <code className="bg-slate-100 px-1.5 py-0.5 rounded font-mono text-[11px] text-slate-800">.env</code>. Click below to load live records.
+                      </>
+                    ) : (
+                      <>
+                        Please set <code className="bg-slate-100 px-1.5 py-0.5 rounded font-mono text-[11px] text-slate-800">VITE_GOOGLE_APPS_SCRIPT_URL</code> in your <code className="bg-slate-100 px-1.5 py-0.5 rounded font-mono text-[11px] text-slate-800">.env</code> file to load student data.
+                      </>
+                    )}
                   </p>
                 </div>
-                <div className="pt-2">
-                  <button
-                    onClick={() => setIsSheetModalOpen(true)}
-                    className="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold inline-flex items-center gap-2 cursor-pointer transition shadow-xs"
-                  >
-                    <FileSpreadsheet className="w-4 h-4" />
-                    <span>Connect Google Sheet Now</span>
-                  </button>
-                </div>
+                {googleSheetUrl && (
+                  <div className="pt-2">
+                    <button
+                      onClick={() => handleSyncGoogleSheet()}
+                      disabled={isSyncing}
+                      className="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold inline-flex items-center gap-2 cursor-pointer transition shadow-xs disabled:opacity-60"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                      <span>{isSyncing ? 'Syncing...' : 'Sync Live Sheet Now'}</span>
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
               <>
@@ -533,16 +563,6 @@ export function App() {
           }}
         />
       )}
-
-      {/* Google Sheet Live Synchronization Modal */}
-      <GoogleSheetSyncModal
-        isOpen={isSheetModalOpen}
-        onClose={() => setIsSheetModalOpen(false)}
-        onSync={handleSyncGoogleSheet}
-        currentUrl={googleSheetUrl}
-        lastSynced={lastSyncedTime}
-        onDisconnect={handleDisconnectSheet}
-      />
     </div>
   );
 }
