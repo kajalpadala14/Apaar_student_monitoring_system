@@ -57,39 +57,75 @@ export function App() {
     new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
   );
 
-  // Google Sheet Integration via .env
+  // Google Sheet Integration via .env (with fallback)
+  const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxpQcPt49Sv03r8KAldMs3frBE0Ru_MOVrmeCsW4XgOozVnEkcGd1PHA_cDvIP4ZgmXZQ/exec';
+  const googleSheetUrl = import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL || DEFAULT_SCRIPT_URL;
+
   const [isSyncing, setIsSyncing] = useState(false);
+  const isSyncingRef = React.useRef(false);
   const [syncFeedback, setSyncFeedback] = useState<{ message: string; error?: boolean } | null>(null);
-  const googleSheetUrl = import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL || '';
   const [lastSyncedTime, setLastSyncedTime] = useState<string | null>(
     () => localStorage.getItem('apaar_sheet_last_synced') || null
   );
 
   const handleSyncGoogleSheet = async (scriptUrl = googleSheetUrl) => {
-    if (!scriptUrl) {
-      setSyncFeedback({ message: 'VITE_GOOGLE_APPS_SCRIPT_URL is not configured in .env file', error: true });
-      return { success: false, message: 'Missing VITE_GOOGLE_APPS_SCRIPT_URL' };
+    if (isSyncingRef.current) {
+      return { success: false, message: 'Sync already in progress' };
     }
+    if (!scriptUrl) {
+      setSyncFeedback({ message: 'Google Apps Script URL is not configured', error: true });
+      return { success: false, message: 'Missing script URL' };
+    }
+
+    isSyncingRef.current = true;
     setIsSyncing(true);
     setSyncFeedback(null);
+
     try {
-      const response = await fetch(scriptUrl, {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' },
-        redirect: 'follow'
-      });
-      if (!response.ok) {
-        throw new Error(`Server returned HTTP ${response.status}`);
+      // Helper with retry on transient Google Apps Script errors (404/5xx when script is busy)
+      let response: Response | null = null;
+      const maxRetries = 2;
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          response = await fetch(scriptUrl, {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' },
+            redirect: 'follow'
+          });
+          if (response.ok) {
+            break;
+          }
+          // If Google Apps Script returned 404/503 (transient busy state), wait and retry
+          if ((response.status === 404 || response.status >= 500) && attempt < maxRetries) {
+            await new Promise(r => setTimeout(r, 2000));
+            continue;
+          }
+        } catch (fetchErr) {
+          if (attempt < maxRetries) {
+            await new Promise(r => setTimeout(r, 2000));
+            continue;
+          }
+          throw fetchErr;
+        }
       }
+
+      if (!response || !response.ok) {
+        const status = response ? response.status : 'Unknown';
+        if (status === 404) {
+          throw new Error('Google Apps Script endpoint is temporarily unavailable or busy. Please retry in a moment.');
+        }
+        throw new Error(`Google Apps Script returned status ${status}`);
+      }
+
       const data = await response.json();
       if (!data || !Array.isArray(data.students)) {
-        throw new Error(data?.message || 'Invalid response: missing "students" array.');
+        throw new Error(data?.message || 'Invalid response format from Google Apps Script.');
       }
       if (data.students.length === 0) {
         throw new Error('Google Sheet returned 0 students. Please check sheet name and headers.');
       }
 
-      // Replace Dexie records with Google Sheet records
+      // Replace Dexie records with fresh Google Sheet records
       await db.students.clear();
       await db.students.bulkAdd(data.students);
 
@@ -110,10 +146,13 @@ export function App() {
       return { success: true, total: data.students.length };
     } catch (err: any) {
       console.error('Error syncing Google Sheet:', err);
-      setSyncFeedback({ message: err.message || 'Failed to sync with Google Sheet', error: true });
-      return { success: false, message: err.message || 'Failed to sync with Google Sheet' };
+      const userMessage = err.message || 'Failed to sync with Google Sheet';
+      setSyncFeedback({ message: userMessage, error: true });
+      setTimeout(() => setSyncFeedback(null), 7000);
+      return { success: false, message: userMessage };
     } finally {
       setIsSyncing(false);
+      isSyncingRef.current = false;
     }
   };
 
@@ -129,30 +168,49 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    let isMounted = true;
+
     async function boot() {
       try {
+        // 1. Immediately load any existing records for 0ms initial wait
+        const existingCount = await db.students.count();
+        if (existingCount > 0 && isMounted) {
+          await loadData();
+          setLoading(false);
+        }
+
+        // 2. Sync with Google Sheet
         if (googleSheetUrl) {
-          setInitMessage('Connecting and syncing with Google Sheet from .env...');
+          if (existingCount === 0 && isMounted) {
+            setInitMessage('Connecting and syncing with Google Sheet...');
+          }
           const syncRes = await handleSyncGoogleSheet(googleSheetUrl);
-          if (syncRes.success) {
+          if (isMounted && syncRes.success) {
             setLoading(false);
             return;
           }
-        } else {
-          // If no sheet URL configured in .env, ensure local DB is empty
-          await db.students.clear();
-          setStudents([]);
         }
+
+        // 3. Fallback database load if not already loaded
         await initializeDatabase();
-        await loadData();
+        if (isMounted) {
+          await loadData();
+        }
       } catch (e) {
         console.error('Boot error:', e);
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     }
+
     boot();
-  }, [loadData]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [loadData, googleSheetUrl]);
 
   // Filter application
   const filteredStudents = useMemo(() => {
