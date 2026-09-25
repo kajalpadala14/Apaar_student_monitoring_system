@@ -81,7 +81,13 @@ function doGet(e) {
     const colClass = findCol(['class']);
     const colSection = findCol(['section']);
     const colPen = findCol(['student pen', 'pen']);
-    const colName = findCol(['student name', 'name']);
+    let colName = findCol(['student name', 'name']);
+    // Safeguard: Ensure colName does not point to state or district name column
+    if (colName === colStateName || colName === colDistrictName || colName === colBlockName || colName === colSchoolName || colName === -1) {
+      if (colPen !== -1 && colPen + 1 < rawHeaders.length) {
+        colName = colPen + 1; // In UDISE+ reports, Student Name is immediately after PEN
+      }
+    }
     const colAadhaarProv = findCol(['provided']);
     const colAadhaarVer = findCol(['verified']);
     const colReason = findCol(['reason']);
