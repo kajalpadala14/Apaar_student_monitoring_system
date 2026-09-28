@@ -407,13 +407,24 @@ export const StudentListView: React.FC = () => {
                         {student.section || 'A'}
                       </td>
                       <td className="py-2.5 px-3 font-semibold text-slate-900 whitespace-nowrap">
-                        <button
-                          onClick={() => setInspectStudent(student)}
-                          className="hover:text-blue-700 hover:underline text-left cursor-pointer"
-                          title="Click to view complete student profile"
-                        >
-                          {student.student_name_marksheet}
-                        </button>
+                        <div className="flex items-center space-x-1.5">
+                          <button
+                            onClick={() => setInspectStudent(student)}
+                            className="hover:text-blue-700 hover:underline text-left cursor-pointer"
+                            title="Click to view complete student profile"
+                          >
+                            {student.student_name_marksheet}
+                          </button>
+                          {student.name_match_status && (
+                            <span className={`text-[9px] px-1 py-0.5 rounded font-bold ${
+                              student.name_match_status === 'Match'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-300'
+                                : 'bg-rose-50 text-rose-700 border border-rose-300'
+                            }`}>
+                              {student.name_match_status}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-2.5 px-3 text-slate-500 max-w-[130px] truncate" title={student.father_name || '-'}>
                         {student.father_name || '-'}

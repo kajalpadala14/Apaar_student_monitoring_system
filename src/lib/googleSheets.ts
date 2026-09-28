@@ -35,7 +35,19 @@ export async function saveToGoogleSheet(
   reason: string,
   rowIndex?: number,
   customUrl?: string,
-  udiseCode?: string
+  udiseCode?: string,
+  extraSurveyData?: {
+    studentNameMarksheet?: string;
+    studentNameAadhaar?: string;
+    nameMatchStatus?: string;
+    dobMarksheet?: string;
+    dobAadhaar?: string;
+    dobMatchStatus?: string;
+    fatherName?: string;
+    districtName?: string;
+    documentsAvailable?: string;
+    remarks?: string;
+  }
 ): Promise<boolean> {
   const url = customUrl || getGoogleScriptUrl();
   if (!url) return false;
@@ -48,7 +60,8 @@ export async function saveToGoogleSheet(
       isAadhaarVerified,
       reason,
       rowIndex,
-      udiseCode
+      udiseCode,
+      ...(extraSurveyData || {})
     };
 
     // Google Apps Script requires text/plain or no-cors / standard POST

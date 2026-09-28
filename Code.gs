@@ -107,6 +107,15 @@ function doGet(e) {
         student_pen_number: pen,
         pen_number: pen,
         student_name_marksheet: String(row[colMap.studentName] || "").trim(),
+        student_name_aadhaar: colMap.studentNameAadhaar !== -1 ? String(row[colMap.studentNameAadhaar] || "").trim() : "",
+        name_match_status: colMap.nameMatchStatus !== -1 ? String(row[colMap.nameMatchStatus] || "").trim() : "",
+        dob_marksheet: colMap.dobMarksheet !== -1 ? String(row[colMap.dobMarksheet] || "").trim() : "",
+        dob_aadhaar: colMap.dobAadhaar !== -1 ? String(row[colMap.dobAadhaar] || "").trim() : "",
+        dob_match_status: colMap.dobMatchStatus !== -1 ? String(row[colMap.dobMatchStatus] || "").trim() : "",
+        father_name: colMap.fatherName !== -1 ? String(row[colMap.fatherName] || "").trim() : "",
+        district_name: colMap.districtName !== -1 ? String(row[colMap.districtName] || "").trim() : "",
+        student_district: colMap.districtName !== -1 ? String(row[colMap.districtName] || "").trim() : "",
+        documents_available: colMap.documentsAvailable !== -1 ? String(row[colMap.documentsAvailable] || "").trim() : "",
         is_aadhaar_provided: isAadhaarProvided,
         is_aadhaar_verified: isAadhaarVerified,
         apaar_pending_reason: reason,
@@ -241,6 +250,47 @@ function doPost(e) {
       sheet.getRange(targetRow, colMap.reason + 1).setValue(reasonVal);
     }
 
+    // नए सर्वे फ़ील्ड्स (Name, DOB, Father Name, District, Documents Availability)
+    var aadhaarName = body.studentNameAadhaar !== undefined ? body.studentNameAadhaar : body.student_name_aadhaar;
+    if (aadhaarName !== undefined && colMap.studentNameAadhaar !== -1) {
+      sheet.getRange(targetRow, colMap.studentNameAadhaar + 1).setValue(aadhaarName);
+    }
+
+    var nameMatch = body.nameMatchStatus !== undefined ? body.nameMatchStatus : body.name_match_status;
+    if (nameMatch !== undefined && colMap.nameMatchStatus !== -1) {
+      sheet.getRange(targetRow, colMap.nameMatchStatus + 1).setValue(nameMatch);
+    }
+
+    var dobM = body.dobMarksheet !== undefined ? body.dobMarksheet : body.dob_marksheet;
+    if (dobM !== undefined && colMap.dobMarksheet !== -1) {
+      sheet.getRange(targetRow, colMap.dobMarksheet + 1).setValue(dobM);
+    }
+
+    var dobA = body.dobAadhaar !== undefined ? body.dobAadhaar : body.dob_aadhaar;
+    if (dobA !== undefined && colMap.dobAadhaar !== -1) {
+      sheet.getRange(targetRow, colMap.dobAadhaar + 1).setValue(dobA);
+    }
+
+    var dobMatch = body.dobMatchStatus !== undefined ? body.dobMatchStatus : body.dob_match_status;
+    if (dobMatch !== undefined && colMap.dobMatchStatus !== -1) {
+      sheet.getRange(targetRow, colMap.dobMatchStatus + 1).setValue(dobMatch);
+    }
+
+    var father = body.fatherName !== undefined ? body.fatherName : body.father_name;
+    if (father !== undefined && colMap.fatherName !== -1) {
+      sheet.getRange(targetRow, colMap.fatherName + 1).setValue(father);
+    }
+
+    var district = body.districtName !== undefined ? body.districtName : (body.student_district || body.district_name);
+    if (district !== undefined && colMap.districtName !== -1) {
+      sheet.getRange(targetRow, colMap.districtName + 1).setValue(district);
+    }
+
+    var docAvail = body.documentsAvailable !== undefined ? body.documentsAvailable : body.documents_available;
+    if (docAvail !== undefined && colMap.documentsAvailable !== -1) {
+      sheet.getRange(targetRow, colMap.documentsAvailable + 1).setValue(docAvail);
+    }
+
     SpreadsheetApp.flush();
     lock.releaseLock();
 
@@ -276,7 +326,15 @@ function getColumnMapping(headers) {
     studentName: 9,
     isAadhaarProvided: 10,
     isAadhaarVerified: 11,
-    reason: 12
+    reason: 12,
+    studentNameAadhaar: -1,
+    nameMatchStatus: -1,
+    dobMarksheet: -1,
+    dobAadhaar: -1,
+    dobMatchStatus: -1,
+    fatherName: -1,
+    districtName: -1,
+    documentsAvailable: -1
   };
 
   // हेडर के नाम से डायनेमिक मैचिंग
@@ -291,7 +349,15 @@ function getColumnMapping(headers) {
     else if (h === "class" || h.indexOf("कक्षा") !== -1) map.className = i;
     else if (h === "section" || h.indexOf("वर्ग") !== -1) map.section = i;
     else if (h.indexOf("pen") !== -1) map.studentPen = i;
+    else if (h.indexOf("name match") !== -1 || h.indexOf("नाम मिलान") !== -1) map.nameMatchStatus = i;
+    else if (h.indexOf("aadhaar") !== -1 && (h.indexOf("name") !== -1 || h.indexOf("नाम") !== -1)) map.studentNameAadhaar = i;
     else if (h.indexOf("student name") !== -1 || h.indexOf("विद्यार्थी") !== -1) map.studentName = i;
+    else if (h.indexOf("dob match") !== -1 || h.indexOf("जन्मतिथि मिलान") !== -1) map.dobMatchStatus = i;
+    else if ((h.indexOf("dob") !== -1 || h.indexOf("जन्म") !== -1) && h.indexOf("aadhaar") !== -1) map.dobAadhaar = i;
+    else if ((h.indexOf("dob") !== -1 || h.indexOf("जन्म") !== -1) && h.indexOf("marksheet") !== -1) map.dobMarksheet = i;
+    else if (h.indexOf("father") !== -1 || h.indexOf("पिता") !== -1) map.fatherName = i;
+    else if (h.indexOf("district") !== -1 || h.indexOf("जिला") !== -1) map.districtName = i;
+    else if (h.indexOf("document") !== -1 || h.indexOf("दस्तावेज") !== -1 || h.indexOf("दस्तावेज़") !== -1) map.documentsAvailable = i;
     else if (h.indexOf("provided") !== -1) map.isAadhaarProvided = i;
     else if (h.indexOf("verified") !== -1) map.isAadhaarVerified = i;
     else if (h.indexOf("reason") !== -1 || h.indexOf("कारण") !== -1) map.reason = i;

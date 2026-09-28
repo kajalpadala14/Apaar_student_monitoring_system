@@ -30,8 +30,12 @@ export interface Student {
   father_name?: string; // विद्यार्थी के पिता का नाम
   student_district?: string; // विद्यार्थी किस जिले का निवासी है
   district_state?: string; // जिला या राज्य का नाम लिखें
+  district_name?: string; // District Name (जिला)
+  name_match_status?: 'Match' | 'Mismatch' | string; // Name Match Status (Match / Mismatch)
+  dob_match_status?: 'Match' | 'Mismatch' | string; // DOB Match Status (Match / Mismatch)
+  documents_available?: 'YES' | 'NO' | string; // Documents Available (YES / NO)
 
-  // Survey fields (3 Main Fields requested: Is AADHAAR Provided, Is AADHAAR Verified, Reason For Not Generated Apaar Id)
+  // Survey fields (Aadhaar, Reasons, Documents, Verification)
   is_aadhaar_provided?: string; // Is AADHAAR Provided (YES / NO)
   is_aadhaar_verified?: string; // Is AADHAAR Verified (YES / NO)
   apaar_pending_reason?: string; // Reason For Not Generated Apaar Id (अपार आईडी नहीं बनने का कारण)

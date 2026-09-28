@@ -473,7 +473,19 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
             updatedStudent.apaar_pending_reason || '',
             (updatedStudent as any).rowIndex,
             targetUrl,
-            updatedStudent.udise_code
+            updatedStudent.udise_code,
+            {
+              studentNameMarksheet: updatedStudent.student_name_marksheet,
+              studentNameAadhaar: updatedStudent.student_name_aadhaar,
+              nameMatchStatus: updatedStudent.name_match_status,
+              dobMarksheet: updatedStudent.dob_marksheet,
+              dobAadhaar: updatedStudent.dob_aadhaar,
+              dobMatchStatus: updatedStudent.dob_match_status,
+              fatherName: updatedStudent.father_name,
+              districtName: updatedStudent.district_name || updatedStudent.student_district,
+              documentsAvailable: updatedStudent.documents_available,
+              remarks: updatedStudent.remarks,
+            }
           ).catch((err) => console.warn('Google Sheet background sync warning:', err));
         }
 
