@@ -35,6 +35,8 @@ function onOpen() {
   ui.createMenu("📋 APAAR Survey Portal")
     .addItem("📊 सर्वे स्थिति देखें (Check Survey Stats)", "showSurveyStats")
     .addItem("⚙️ हेडर की जांच करें (Verify Column Headers)", "verifyHeaders")
+    .addSeparator()
+    .addItem("⚡ 1-Click: सभी नए सर्वे कॉलम जोड़ें (Auto Add All Survey Columns)", "autoAddSurveyColumns")
     .addToUi();
 }
 
@@ -48,6 +50,17 @@ function doGet(e) {
 
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = SHEET_NAME ? (ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0]) : ss.getSheets()[0];
+
+    // अगर नए सर्वे कॉलम ऑटो-सेटअप करने हों
+    if (action === "setupColumns" || action === "addColumns") {
+      var setupRes = setupSurveyColumns(sheet);
+      return sendJsonResponse({
+        success: true,
+        message: "Columns setup completed",
+        added: setupRes.added,
+        totalColumns: setupRes.totalCols
+      });
+    }
 
     // अगर केवल आँकड़े (Stats) चाहिए
     if (action === "stats") {
@@ -250,45 +263,64 @@ function doPost(e) {
       sheet.getRange(targetRow, colMap.reason + 1).setValue(reasonVal);
     }
 
+    // ऑटो-कॉलम क्रिएशन हेल्पर (अगर शीट में कॉलम नहीं है तो खुद बना देगा)
+    function getOrCreateCol(colKey, defaultHeader) {
+      if (colMap[colKey] !== -1 && colMap[colKey] !== undefined) {
+        return colMap[colKey] + 1;
+      }
+      var newCol = sheet.getLastColumn() + 1;
+      sheet.getRange(1, newCol).setValue(defaultHeader).setFontWeight("bold");
+      colMap[colKey] = newCol - 1;
+      return newCol;
+    }
+
     // नए सर्वे फ़ील्ड्स (Name, DOB, Father Name, District, Documents Availability)
     var aadhaarName = body.studentNameAadhaar !== undefined ? body.studentNameAadhaar : body.student_name_aadhaar;
-    if (aadhaarName !== undefined && colMap.studentNameAadhaar !== -1) {
-      sheet.getRange(targetRow, colMap.studentNameAadhaar + 1).setValue(aadhaarName);
+    if (aadhaarName !== undefined && aadhaarName !== "") {
+      var colIdx = getOrCreateCol("studentNameAadhaar", "Aadhaar Name");
+      sheet.getRange(targetRow, colIdx).setValue(aadhaarName);
     }
 
     var nameMatch = body.nameMatchStatus !== undefined ? body.nameMatchStatus : body.name_match_status;
-    if (nameMatch !== undefined && colMap.nameMatchStatus !== -1) {
-      sheet.getRange(targetRow, colMap.nameMatchStatus + 1).setValue(nameMatch);
+    if (nameMatch !== undefined && nameMatch !== "") {
+      var colIdx = getOrCreateCol("nameMatchStatus", "Name Match Status");
+      sheet.getRange(targetRow, colIdx).setValue(nameMatch);
     }
 
     var dobM = body.dobMarksheet !== undefined ? body.dobMarksheet : body.dob_marksheet;
-    if (dobM !== undefined && colMap.dobMarksheet !== -1) {
-      sheet.getRange(targetRow, colMap.dobMarksheet + 1).setValue(dobM);
+    if (dobM !== undefined && dobM !== "") {
+      var colIdx = getOrCreateCol("dobMarksheet", "DOB Marksheet");
+      sheet.getRange(targetRow, colIdx).setValue(dobM);
     }
 
     var dobA = body.dobAadhaar !== undefined ? body.dobAadhaar : body.dob_aadhaar;
-    if (dobA !== undefined && colMap.dobAadhaar !== -1) {
-      sheet.getRange(targetRow, colMap.dobAadhaar + 1).setValue(dobA);
+    if (dobA !== undefined && dobA !== "") {
+      var colIdx = getOrCreateCol("dobAadhaar", "DOB Aadhaar");
+      sheet.getRange(targetRow, colIdx).setValue(dobA);
     }
 
     var dobMatch = body.dobMatchStatus !== undefined ? body.dobMatchStatus : body.dob_match_status;
-    if (dobMatch !== undefined && colMap.dobMatchStatus !== -1) {
-      sheet.getRange(targetRow, colMap.dobMatchStatus + 1).setValue(dobMatch);
+    if (dobMatch !== undefined && dobMatch !== "") {
+      var colIdx = getOrCreateCol("dobMatchStatus", "DOB Match Status");
+      sheet.getRange(targetRow, colIdx).setValue(dobMatch);
     }
 
     var father = body.fatherName !== undefined ? body.fatherName : body.father_name;
-    if (father !== undefined && colMap.fatherName !== -1) {
-      sheet.getRange(targetRow, colMap.fatherName + 1).setValue(father);
+    if (father !== undefined && father !== "") {
+      var colIdx = getOrCreateCol("fatherName", "Father Name");
+      sheet.getRange(targetRow, colIdx).setValue(father);
     }
 
     var district = body.districtName !== undefined ? body.districtName : (body.student_district || body.district_name);
-    if (district !== undefined && colMap.districtName !== -1) {
-      sheet.getRange(targetRow, colMap.districtName + 1).setValue(district);
+    if (district !== undefined && district !== "") {
+      var colIdx = getOrCreateCol("districtName", "District Name");
+      sheet.getRange(targetRow, colIdx).setValue(district);
     }
 
     var docAvail = body.documentsAvailable !== undefined ? body.documentsAvailable : body.documents_available;
-    if (docAvail !== undefined && colMap.documentsAvailable !== -1) {
-      sheet.getRange(targetRow, colMap.documentsAvailable + 1).setValue(docAvail);
+    if (docAvail !== undefined && docAvail !== "") {
+      var colIdx = getOrCreateCol("documentsAvailable", "Documents Available");
+      sheet.getRange(targetRow, colIdx).setValue(docAvail);
     }
 
     SpreadsheetApp.flush();
@@ -459,4 +491,67 @@ function sendJsonResponse(data) {
 function testFetchData() {
   var result = doGet();
   Logger.log(result.getContent());
+}
+
+/**
+ * ⚡ 1-क्लिक ऑटो-कॉलम सेटअप फ़ंक्शन (Google Sheets UI मेन्यू से चलाने के लिए)
+ */
+function autoAddSurveyColumns() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = SHEET_NAME ? (ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0]) : ss.getSheets()[0];
+  var res = setupSurveyColumns(sheet);
+  var ui = SpreadsheetApp.getUi();
+  
+  if (res.added && res.added.length > 0) {
+    ui.alert(
+      "✅ सफलता (Columns Added Successfully)",
+      "आपकी शीट में निम्न नए कॉलम सफलतापूर्वक जोड़ दिए गए हैं:\n\n" + res.added.join("\n") + "\n\nअब आप वेब पोर्टल से नया सर्वे डेटा सेव कर सकते हैं।",
+      ui.ButtonSet.OK
+    );
+  } else {
+    ui.alert(
+      "ℹ️ सूचना (Already Present)",
+      "सभी आवश्यक सर्वे कॉलम पहले से ही इस शीट में मौजूद हैं। कोई नया कॉलम जोड़ने की आवश्यकता नहीं है।",
+      ui.ButtonSet.OK
+    );
+  }
+}
+
+/**
+ * कोर हेल्पर: शीट में नए सर्वे कॉलम जोड़ना और फॉर्मेट करना
+ */
+function setupSurveyColumns(sheet) {
+  var lastCol = sheet.getLastColumn();
+  if (lastCol === 0) return { added: [], totalCols: 0 };
+
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function(h) { return String(h).trim(); });
+  var colMap = getColumnMapping(headers);
+
+  var newColumns = [
+    { key: "studentNameAadhaar", name: "Aadhaar Name" },
+    { key: "nameMatchStatus", name: "Name Match Status" },
+    { key: "dobMarksheet", name: "DOB Marksheet" },
+    { key: "dobAadhaar", name: "DOB Aadhaar" },
+    { key: "dobMatchStatus", name: "DOB Match Status" },
+    { key: "fatherName", name: "Father Name" },
+    { key: "districtName", name: "District Name" },
+    { key: "documentsAvailable", name: "Documents Available" }
+  ];
+
+  var added = [];
+
+  newColumns.forEach(function(item) {
+    if (colMap[item.key] === -1 || colMap[item.key] === undefined) {
+      lastCol++;
+      var cell = sheet.getRange(1, lastCol);
+      cell.setValue(item.name);
+      cell.setFontWeight("bold");
+      cell.setBackground("#E8EEF5"); // Soft professional header tint
+      added.push("• " + item.name + " (कॉलम " + lastCol + ")");
+      colMap[item.key] = lastCol - 1;
+    }
+  });
+
+  SpreadsheetApp.flush();
+  return { added: added, totalCols: lastCol };
 }
