@@ -137,35 +137,58 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, []);
 
-  // Initialize data on mount
+  // Initialize data on mount (Blazing fast: IndexedDB -> CDN Preload -> Background Sync)
   useEffect(() => {
     let isMounted = true;
-    async function init() {
-      setLoading(true);
 
-      // 1. Instant load from IndexedDB if available
+    async function init() {
+      let hasData = false;
+
+      // 1. Instant load from local IndexedDB if available (~10ms)
       try {
         const cached = await getCachedStudents();
         if (isMounted && cached && cached.length > 0) {
           console.log(`Instant startup: Loaded ${cached.length} students from local cache.`);
           setRawStudents(cached);
           setLoading(false);
+          hasData = true;
         }
       } catch (cacheErr) {
         console.warn('Cache check failed:', cacheErr);
       }
 
-      // 2. Fetch fresh live data from Google Sheet
+      // 2. If no local cache, load instantly from bundled CDN static data (~300ms)
+      if (!hasData) {
+        try {
+          const res = await fetch('/data/students.json');
+          if (res.ok) {
+            const data = await res.json();
+            const list = Array.isArray(data) ? data : (data.students || []);
+            if (isMounted && list.length > 0) {
+              console.log(`Blazing fast CDN preload: Loaded ${list.length} students.`);
+              setRawStudents(list);
+              setLoading(false);
+              hasData = true;
+              bulkSaveStudents(list).catch(console.warn);
+            }
+          }
+        } catch (cdnErr) {
+          console.warn('CDN static preload failed, will fetch live:', cdnErr);
+        }
+      }
+
+      // 3. Background live sync from Google Sheet (updates any newly edited surveys)
       try {
         const liveData = await loadMasterData();
         if (isMounted && liveData.length > 0) {
           setRawStudents(liveData);
+          bulkSaveStudents(liveData).catch(console.warn);
           setError(null);
-        } else if (isMounted && rawStudents.length === 0) {
+        } else if (isMounted && !hasData) {
           setError('Google Sheet से डेटा प्राप्त नहीं हो सका। कृपया इंटरनेट कनेक्शन जांचें।');
         }
       } catch (err: any) {
-        if (isMounted && rawStudents.length === 0) {
+        if (isMounted && !hasData) {
           setError(err.message || 'Error loading database');
         }
       } finally {
