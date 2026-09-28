@@ -1,7 +1,13 @@
 import { Student } from '../types/student';
 
+export const DEFAULT_GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyueMjUUaUDxlA4uvBdGoLU9kZZi8yy_4gxcYyaQzDoVtBFTPZoCEaj2v4BiwfHwXqK/exec';
+
 export function getGoogleScriptUrl(): string {
-  return (import.meta.env.VITE_GOOGLE_SCRIPT_URL as string) || '';
+  const envUrl = import.meta.env.VITE_GOOGLE_SCRIPT_URL as string;
+  if (envUrl && envUrl.trim().length > 0) {
+    return envUrl.trim();
+  }
+  return DEFAULT_GOOGLE_SCRIPT_URL;
 }
 
 /**

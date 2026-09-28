@@ -9,7 +9,7 @@ import { LoginPage } from './components/Auth/LoginPage';
 import { RefreshCw, AlertCircle } from 'lucide-react';
 
 const MainLayout: React.FC = () => {
-  const { activeTab, loading, error, currentUser, rawStudents } = useStudents();
+  const { activeTab, loading, error, currentUser, rawStudents, logout } = useStudents();
 
   // Database loading spinner on initial startup if no cache exists yet
   if (loading && rawStudents.length === 0) {
@@ -41,12 +41,20 @@ const MainLayout: React.FC = () => {
           <AlertCircle className="w-10 h-10 text-rose-600 mx-auto mb-2" />
           <h3 className="text-base font-bold text-slate-900">Database Connection Error</h3>
           <p className="text-xs text-rose-700 mt-1">{error}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="mt-4 bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-md hover:bg-blue-800 cursor-pointer"
-          >
-            Retry Connection
-          </button>
+          <div className="flex items-center justify-center gap-2 mt-4">
+            <button
+              onClick={() => window.location.reload()}
+              className="bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-md hover:bg-blue-800 cursor-pointer"
+            >
+              Retry Connection
+            </button>
+            <button
+              onClick={logout}
+              className="bg-slate-100 text-slate-700 border border-slate-300 text-xs font-semibold px-4 py-2 rounded-md hover:bg-slate-200 cursor-pointer"
+            >
+              Logout / Login Again
+            </button>
+          </div>
         </div>
       </div>
     );
