@@ -69,22 +69,22 @@ const MainLayout: React.FC = () => {
       <Navbar />
 
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="flex-1 max-w-[1600px] w-full mx-auto px-2.5 sm:px-4 md:px-6 lg:px-8 py-3.5 sm:py-5 md:py-6">
         {activeTab === 'dashboard' && <DashboardView />}
         {activeTab === 'students' && <StudentListView />}
         {activeTab === 'reports' && <ReportsView />}
       </main>
 
       {/* Official Footer */}
-      <footer className="bg-white border-t border-slate-200 py-5 text-center text-xs text-slate-500 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-1">
-          <p className="font-semibold text-slate-700">
+      <footer className="bg-white border-t border-slate-200 py-4 sm:py-5 text-center text-xs text-slate-500 mt-auto">
+        <div className="max-w-[1600px] mx-auto px-2.5 sm:px-4 md:px-6 lg:px-8 space-y-1">
+          <p className="font-semibold text-slate-700 text-xs sm:text-sm">
             Dantewada APAAR Pending Survey Portal &bull; जिला दंतेवाड़ा, छत्तीसगढ़
           </p>
-          <p className="text-slate-500 text-[11px]">
+          <p className="text-slate-500 text-[10px] sm:text-[11px]">
             स्कूल शिक्षा विभाग, छत्तीसगढ़ शासन (School Education Department, Govt. of Chhattisgarh) &bull; NIC / District Administration Dantewada
           </p>
-          <p className="text-[10px] text-slate-400">
+          <p className="text-[9px] sm:text-[10px] text-slate-400">
             {currentUser.role === 'ADMIN'
               ? 'District Administrator View (Full District Access &bull; 4 Blocks: Dantewada, Geedam, Kuakonda, Katekalyan)'
               : `School Portal View &bull; UDISE: ${currentUser.udiseCode || ''} &bull; ${currentUser.schoolName || ''}`}

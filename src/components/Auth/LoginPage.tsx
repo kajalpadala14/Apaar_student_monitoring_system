@@ -68,31 +68,31 @@ export const LoginPage: React.FC = () => {
     <div className="min-h-screen bg-linear-to-b from-slate-100 to-slate-200 flex flex-col justify-between text-slate-800">
       
       {/* Top National/State Bar */}
-      <div className="bg-blue-900 text-slate-100 text-xs py-1.5 px-4 flex justify-between items-center border-b border-blue-950">
-        <div className="flex items-center space-x-2">
-          <span className="font-semibold tracking-wide">स्कूल शिक्षा विभाग, छत्तीसगढ़ शासन</span>
-          <span className="text-blue-300">|</span>
-          <span className="text-blue-200">School Education Department, Govt. of Chhattisgarh</span>
+      <div className="bg-blue-900 text-slate-100 text-[10px] sm:text-xs py-1.5 px-2.5 sm:px-4 flex justify-between items-center border-b border-blue-950">
+        <div className="flex items-center space-x-1.5 sm:space-x-2 truncate mr-2">
+          <span className="font-semibold tracking-wide truncate">स्कूल शिक्षा विभाग, छत्तीसगढ़ शासन</span>
+          <span className="text-blue-300 hidden sm:inline">|</span>
+          <span className="text-blue-200 hidden md:inline truncate">School Education Department, Govt. of Chhattisgarh</span>
         </div>
-        <div className="text-slate-300 text-xs">
+        <div className="text-slate-300 text-[10px] sm:text-xs shrink-0">
           <span>District Dantewada</span>
         </div>
       </div>
 
       {/* Main Container */}
-      <div className="flex-1 flex items-center justify-center p-4 sm:p-6 my-4">
+      <div className="flex-1 flex items-center justify-center p-2.5 sm:p-6 my-2 sm:my-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
           
           {/* Header Banner */}
-          <div className="bg-linear-to-r from-blue-900 via-blue-800 to-indigo-900 text-white p-6 text-center relative">
-            <div className="w-16 h-16 bg-white/95 rounded-xl p-2 mx-auto mb-3 shadow-md flex items-center justify-center">
+          <div className="bg-linear-to-r from-blue-900 via-blue-800 to-indigo-900 text-white p-4 sm:p-6 text-center relative">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 bg-white/95 rounded-xl p-2 mx-auto mb-2.5 sm:mb-3 shadow-md flex items-center justify-center">
               <img src="/emblem.svg" alt="National Emblem" className="w-full h-full object-contain" />
             </div>
-            <h1 className="text-xl font-bold tracking-tight">APAAR Student Survey Portal</h1>
+            <h1 className="text-lg sm:text-xl font-bold tracking-tight">APAAR Student Survey Portal</h1>
             <p className="text-blue-200 text-xs mt-1 font-medium">
               जिला दंतेवाड़ा &bull; छात्र अपार आईडी सत्यापन एवं सर्वेक्षण पोर्टल
             </p>
-            <div className="mt-2.5 inline-flex items-center space-x-1.5 bg-blue-700/60 border border-blue-500/40 rounded-full px-3 py-1 text-[11px] text-blue-100">
+            <div className="mt-2.5 inline-flex items-center space-x-1.5 bg-blue-700/60 border border-blue-500/40 rounded-full px-2.5 sm:px-3 py-1 text-[10px] sm:text-[11px] text-blue-100">
               {loading && rawStudents.length === 0 ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 text-amber-300 animate-spin" />

@@ -54,6 +54,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
 
   // 4. Documents Availability
   const [documentsAvailable, setDocumentsAvailable] = useState<string>('');
+  const [documentType, setDocumentType] = useState<string>('');
 
   // 5. Aadhaar & APAAR Reason
   const [isAadhaarProvided, setIsAadhaarProvided] = useState<string>('');
@@ -65,6 +66,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   
   const [isSaving, setIsSaving] = useState(false);
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   // Sync state whenever student prop changes
   useEffect(() => {
@@ -100,8 +102,35 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
     setFatherName(student.father_name || '');
     setDistrictName(student.district_name || student.student_district || 'Dantewada');
 
-    // Documents Availability
-    setDocumentsAvailable(student.documents_available || '');
+    // Documents Availability & Type
+    const initialDocAvail = student.documents_available || '';
+    if (initialDocAvail.startsWith('YES')) {
+      setDocumentsAvailable('YES');
+      if (initialDocAvail.includes('मार्कशीट') && initialDocAvail.includes('जन्म प्रमाण पत्र')) {
+        setDocumentType('दोनों उपलब्ध हैं (Both - Marksheet & Birth Certificate)');
+      } else if (initialDocAvail.includes('मार्कशीट') || initialDocAvail.toLowerCase().includes('marksheet')) {
+        setDocumentType('मार्कशीट (Marksheet)');
+      } else if (initialDocAvail.includes('जन्म प्रमाण पत्र') || initialDocAvail.toLowerCase().includes('birth')) {
+        setDocumentType('जन्म प्रमाण पत्र (Birth Certificate)');
+      } else {
+        setDocumentType('');
+      }
+    } else if (initialDocAvail === 'NO') {
+      setDocumentsAvailable('NO');
+      setDocumentType('');
+    } else if (initialDocAvail.includes('मार्कशीट') || initialDocAvail.includes('जन्म प्रमाण पत्र')) {
+      setDocumentsAvailable('YES');
+      if (initialDocAvail.includes('मार्कशीट') && initialDocAvail.includes('जन्म प्रमाण पत्र')) {
+        setDocumentType('दोनों उपलब्ध हैं (Both - Marksheet & Birth Certificate)');
+      } else if (initialDocAvail.includes('मार्कशीट')) {
+        setDocumentType('मार्कशीट (Marksheet)');
+      } else {
+        setDocumentType('जन्म प्रमाण पत्र (Birth Certificate)');
+      }
+    } else {
+      setDocumentsAvailable(initialDocAvail);
+      setDocumentType('');
+    }
 
     // Aadhaar & Reason
     setIsAadhaarProvided(student.is_aadhaar_provided || '');
@@ -113,6 +142,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
       student.survey_status === 'PENDING' ? 'SURVEY COMPLETED' : student.survey_status
     );
     setSuccessNotice(null);
+    setValidationErrors([]);
   }, [student.id]);
 
   // Auto update Name match status when typing if both are present
@@ -149,6 +179,16 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
     }
   };
 
+  // Check if all verification checks are matched and YES
+  const isNameMatched = nameMatchStatus?.trim().toLowerCase() === 'match';
+  const isDobMatched = dobMatchStatus?.trim().toLowerCase() === 'match';
+  const isAadhaarYes = isAadhaarProvided?.trim().toUpperCase() === 'YES';
+  const isVerifiedYes = isAadhaarVerified?.trim().toUpperCase() === 'YES';
+  const isDocsNotNo = !documentsAvailable || documentsAvailable?.trim().toUpperCase() !== 'NO';
+
+  // When both Name & DOB match, and Aadhaar provided/verified are YES (and documents not NO), no pending reason is needed
+  const isAllMatchedAndYes = isNameMatched && isDobMatched && isAadhaarYes && isVerifiedYes && isDocsNotNo;
+
   const getPayload = (): Partial<Student> => ({
     student_name_marksheet: studentNameMarksheet,
     student_name_aadhaar: studentNameAadhaar,
@@ -159,13 +199,15 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
     father_name: fatherName,
     district_name: districtName,
     student_district: districtName,
-    documents_available: documentsAvailable,
+    documents_available: documentsAvailable === 'YES'
+      ? (documentType ? `YES - ${documentType}` : 'YES')
+      : (documentsAvailable || ''),
     is_aadhaar_provided: isAadhaarProvided,
     is_aadhaar_verified: isAadhaarVerified,
-    apaar_pending_reason: reason,
-    other_reason: reason === 'Other' || reason === 'अन्य (Other)' ? otherReason : '',
+    apaar_pending_reason: isAllMatchedAndYes ? '' : reason,
+    other_reason: isAllMatchedAndYes ? '' : (reason === 'Other' || reason === 'अन्य (Other)' ? otherReason : ''),
     remarks,
-    survey_status: (reason || isAadhaarProvided || documentsAvailable || nameMatchStatus || dobMatchStatus) ? 'SURVEY COMPLETED' : surveyStatus,
+    survey_status: (isAllMatchedAndYes || reason || isAadhaarProvided || documentsAvailable || nameMatchStatus || dobMatchStatus) ? 'SURVEY COMPLETED' : surveyStatus,
     surveyor_name: currentUser?.name || 'Surveyor',
     survey_date: new Date().toISOString(),
   });
@@ -182,6 +224,72 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   }, [onClose]);
 
   const handleSave = async (autoAdvance: boolean = false) => {
+    const errors: string[] = [];
+
+    // 1. Name Section
+    if (!studentNameMarksheet.trim()) {
+      errors.push('विद्यार्थी का नाम (मार्कशीट अनुसार)');
+    }
+    if (isAadhaarProvided !== 'NO' && !studentNameAadhaar.trim()) {
+      errors.push('विद्यार्थी का नाम (आधार अनुसार)');
+    }
+    if (!nameMatchStatus) {
+      errors.push('Name Match Status (Match या Mismatch चुनें)');
+    }
+
+    // 2. DOB Section
+    if (!dobMarksheet.trim()) {
+      errors.push('जन्मतिथि (मार्कशीट अनुसार)');
+    }
+    if (isAadhaarProvided !== 'NO' && !dobAadhaar.trim()) {
+      errors.push('जन्मतिथि (आधार अनुसार)');
+    }
+    if (!dobMatchStatus) {
+      errors.push('DOB Match Status (Match या Mismatch चुनें)');
+    }
+
+    // 3. Father & District
+    if (!fatherName.trim()) {
+      errors.push('पिता का नाम (Father\'s Name)');
+    }
+    if (!districtName.trim()) {
+      errors.push('जिला (District Name)');
+    }
+
+    // 4. Documents Availability
+    if (!documentsAvailable) {
+      errors.push('दस्तावेज़ उपलब्धता (YES या NO चुनें)');
+    } else if (documentsAvailable === 'YES' && !documentType) {
+      errors.push('उपलब्ध दस्तावेज़ का प्रकार (मार्कशीट / जन्म प्रमाण पत्र चुनें)');
+    }
+
+    // 5. Aadhaar Provided & Verified
+    if (!isAadhaarProvided) {
+      errors.push('1. क्या आधार उपलब्ध कराया गया है? (YES या NO चुनें)');
+    }
+    if (!isAadhaarVerified) {
+      errors.push('2. क्या आधार सत्यापित है? (YES या NO चुनें)');
+    }
+
+    // 6. Reason if not fully matched & verified
+    if (!isAllMatchedAndYes) {
+      if (!reason) {
+        errors.push('3. अपार आईडी नहीं बनने का कारण (Select Reason)');
+      } else if ((reason === 'Other' || reason === 'अन्य (Other)') && !otherReason.trim()) {
+        errors.push('अन्य कारण का विवरण लिखें (Specify Other Reason)');
+      }
+    }
+
+    if (errors.length > 0) {
+      setValidationErrors(errors);
+      const scrollContainer = document.getElementById('survey-modal-scroll');
+      if (scrollContainer) {
+        scrollContainer.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+      return;
+    }
+
+    setValidationErrors([]);
     setIsSaving(true);
     const payload = getPayload();
     const success = await updateStudentSurvey(student.id, payload);
@@ -206,11 +314,11 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 flex items-center justify-center p-2 sm:p-4"
+      className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-0 sm:p-4"
       onClick={onClose}
     >
       <div 
-        className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[94vh]"
+        className="bg-white rounded-none sm:rounded-xl shadow-2xl border-0 sm:border border-slate-200 w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col h-full sm:h-auto sm:max-h-[94vh]"
         onClick={(e) => e.stopPropagation()}
       >
         
@@ -238,8 +346,23 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
         </div>
 
         {/* Scrollable Content */}
-        <div className="p-4 sm:p-5 space-y-4 overflow-y-auto text-xs flex-1">
+        <div id="survey-modal-scroll" className="p-4 sm:p-5 space-y-4 overflow-y-auto text-xs flex-1">
           
+          {/* Validation Error Alert Banner */}
+          {validationErrors.length > 0 && (
+            <div className="bg-rose-50 border border-rose-300 text-rose-800 p-3 rounded-lg flex items-start space-x-2.5 animate-in fade-in duration-150">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <div className="text-xs">
+                <span className="font-bold block mb-1">कृपया निम्नलिखित अनिवार्य फ़ील्ड भरें (All Fields Are Mandatory):</span>
+                <ul className="list-disc list-inside space-y-0.5 text-rose-700">
+                  {validationErrors.map((err, idx) => (
+                    <li key={idx}>{err}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+
           {/* Save Success Alert Banner */}
           {successNotice && (
             <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 p-2.5 rounded-lg flex items-center space-x-2 animate-in fade-in duration-150">
@@ -314,13 +437,13 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
 
           {/* SECTION 2: SURVEY FORM */}
           <div className="bg-white border-2 border-blue-200 rounded-lg p-4 space-y-4 shadow-xs">
-            <div className="border-b border-blue-100 pb-2 flex items-center justify-between">
+            <div className="border-b border-blue-100 pb-2 flex items-center justify-between flex-wrap gap-2">
               <span className="text-xs font-bold text-blue-900 uppercase tracking-wider flex items-center space-x-1.5">
                 <span className="w-2.5 h-2.5 rounded-full bg-blue-700"></span>
                 <span>APAAR Verification & Survey Details</span>
               </span>
-              <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
-                Dantewada District Portal
+              <span className="text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded">
+                * सभी फ़ील्ड भरना अनिवार्य है (All Fields Mandatory)
               </span>
             </div>
 
@@ -329,7 +452,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
                   <User className="w-4 h-4 text-blue-700" />
-                  <span>Name (विद्यार्थी का नाम)</span>
+                  <span>Name (विद्यार्थी का नाम) <span className="text-rose-500 font-bold">*</span></span>
                 </label>
                 {nameMatchStatus && (
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded flex items-center space-x-1 ${
@@ -345,7 +468,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                 {/* Marksheet-wise Name */}
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                    Marksheet-wise Name <span className="text-slate-400 font-normal">(मार्कशीट अनुसार नाम)</span>:
+                    Marksheet-wise Name <span className="text-rose-500 font-bold">*</span> <span className="text-slate-400 font-normal">(मार्कशीट अनुसार)</span>:
                   </label>
                   <input
                     type="text"
@@ -359,7 +482,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                 {/* Aadhaar-wise Name */}
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                    Aadhaar-wise Name <span className="text-slate-400 font-normal">(आधार अनुसार नाम)</span>:
+                    Aadhaar-wise Name <span className="text-rose-500 font-bold">*</span> <span className="text-slate-400 font-normal">(आधार अनुसार)</span>:
                   </label>
                   <input
                     type="text"
@@ -374,13 +497,13 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               {/* Name Match Status Buttons */}
               <div>
                 <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
-                  Name Match Status:
+                  Name Match Status: <span className="text-rose-500 font-bold">*</span>
                 </label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => setNameMatchStatus('Match')}
-                    className={`py-1.5 px-3 rounded-md border text-xs font-semibold flex items-center justify-center space-x-1.5 transition-all cursor-pointer ${
+                    className={`py-2 sm:py-1.5 px-3 rounded-md border text-xs font-semibold flex items-center justify-center space-x-1.5 transition-all cursor-pointer ${
                       nameMatchStatus === 'Match'
                         ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs'
                         : 'bg-white text-slate-700 border-slate-300 hover:bg-emerald-50'
@@ -393,7 +516,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setNameMatchStatus('Mismatch')}
-                    className={`py-1.5 px-3 rounded-md border text-xs font-semibold flex items-center justify-center space-x-1.5 transition-all cursor-pointer ${
+                    className={`py-2 sm:py-1.5 px-3 rounded-md border text-xs font-semibold flex items-center justify-center space-x-1.5 transition-all cursor-pointer ${
                       nameMatchStatus === 'Mismatch'
                         ? 'bg-rose-600 text-white border-rose-700 shadow-2xs'
                         : 'bg-white text-slate-700 border-slate-300 hover:bg-rose-50'
@@ -411,7 +534,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
                   <Calendar className="w-4 h-4 text-blue-700" />
-                  <span>Date of Birth (D.O.B. / जन्मतिथि)</span>
+                  <span>Date of Birth (D.O.B. / जन्मतिथि) <span className="text-rose-500 font-bold">*</span></span>
                 </label>
                 {dobMatchStatus && (
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded flex items-center space-x-1 ${
@@ -427,7 +550,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                 {/* Marksheet-wise DOB */}
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                    Marksheet-wise DOB <span className="text-slate-400 font-normal">(मार्कशीट अनुसार)</span>:
+                    Marksheet-wise DOB <span className="text-rose-500 font-bold">*</span> <span className="text-slate-400 font-normal">(मार्कशीट अनुसार)</span>:
                   </label>
                   <input
                     type="text"
@@ -441,7 +564,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                 {/* Aadhaar-wise DOB */}
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                    Aadhaar-wise DOB <span className="text-slate-400 font-normal">(आधार अनुसार)</span>:
+                    Aadhaar-wise DOB <span className="text-rose-500 font-bold">*</span> <span className="text-slate-400 font-normal">(आधार अनुसार)</span>:
                   </label>
                   <input
                     type="text"
@@ -456,13 +579,13 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               {/* DOB Match Status Buttons */}
               <div>
                 <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
-                  DOB Match Status:
+                  DOB Match Status: <span className="text-rose-500 font-bold">*</span>
                 </label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => setDobMatchStatus('Match')}
-                    className={`py-1.5 px-3 rounded-md border text-xs font-semibold flex items-center justify-center space-x-1.5 transition-all cursor-pointer ${
+                    className={`py-2 sm:py-1.5 px-3 rounded-md border text-xs font-semibold flex items-center justify-center space-x-1.5 transition-all cursor-pointer ${
                       dobMatchStatus === 'Match'
                         ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs'
                         : 'bg-white text-slate-700 border-slate-300 hover:bg-emerald-50'
@@ -475,7 +598,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setDobMatchStatus('Mismatch')}
-                    className={`py-1.5 px-3 rounded-md border text-xs font-semibold flex items-center justify-center space-x-1.5 transition-all cursor-pointer ${
+                    className={`py-2 sm:py-1.5 px-3 rounded-md border text-xs font-semibold flex items-center justify-center space-x-1.5 transition-all cursor-pointer ${
                       dobMatchStatus === 'Mismatch'
                         ? 'bg-rose-600 text-white border-rose-700 shadow-2xs'
                         : 'bg-white text-slate-700 border-slate-300 hover:bg-rose-50'
@@ -494,7 +617,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
                 <label className="block text-xs font-bold text-slate-900 mb-1 flex items-center space-x-1.5">
                   <User className="w-3.5 h-3.5 text-blue-700" />
-                  <span>Father's Name (पिता का नाम)</span>
+                  <span>Father's Name (पिता का नाम) <span className="text-rose-500 font-bold">*</span></span>
                 </label>
                 <input
                   type="text"
@@ -509,7 +632,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
                 <label className="block text-xs font-bold text-slate-900 mb-1 flex items-center space-x-1.5">
                   <MapPin className="w-3.5 h-3.5 text-blue-700" />
-                  <span>District Name (जिला)</span>
+                  <span>District Name (जिला) <span className="text-rose-500 font-bold">*</span></span>
                 </label>
                 <input
                   type="text"
@@ -526,18 +649,20 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
                   <Files className="w-4 h-4 text-blue-700" />
-                  <span>Documents Availability (दस्तावेज़ उपलब्धता)</span>
+                  <span>Documents Availability (दस्तावेज़ उपलब्धता) <span className="text-rose-500 font-bold">*</span></span>
                 </label>
                 {documentsAvailable && (
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
                     documentsAvailable === 'YES' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
                   }`}>
-                    {documentsAvailable === 'YES' ? 'Available (उपलब्ध)' : 'Not Available (अनुपलब्ध)'}
+                    {documentsAvailable === 'YES'
+                      ? (documentType ? `उपलब्ध: ${documentType.split('(')[0].trim()}` : 'Available (उपलब्ध)')
+                      : 'Not Available (अनुपलब्ध)'}
                   </span>
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-2.5 pt-0.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5 pt-0.5">
                 <button
                   type="button"
                   onClick={() => setDocumentsAvailable('YES')}
@@ -553,7 +678,10 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => setDocumentsAvailable('NO')}
+                  onClick={() => {
+                    setDocumentsAvailable('NO');
+                    setDocumentType('');
+                  }}
                   className={`py-2 px-3 rounded-lg border text-xs font-bold flex items-center justify-center space-x-2 transition-all cursor-pointer ${
                     documentsAvailable === 'NO'
                       ? 'bg-rose-600 text-white border-rose-700 shadow-2xs'
@@ -564,6 +692,30 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                   <span>NO (नहीं - दस्तावेज़ उपलब्ध नहीं हैं)</span>
                 </button>
               </div>
+
+              {/* Dropdown when YES is selected */}
+              {documentsAvailable === 'YES' && (
+                <div className="pt-2 border-t border-slate-200 animate-in fade-in duration-150 space-y-1">
+                  <label className="block text-[11px] font-bold text-slate-800 flex items-center justify-between">
+                    <span>उपलब्ध दस्तावेज़ का प्रकार (Select Document Type): <span className="text-rose-500 font-bold">*</span></span>
+                    {documentType && (
+                      <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded">
+                        चयनित: {documentType.split('(')[0].trim()}
+                      </span>
+                    )}
+                  </label>
+                  <select
+                    value={documentType}
+                    onChange={(e) => setDocumentType(e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-md py-1.5 px-2.5 text-xs text-slate-900 font-semibold focus:ring-2 focus:ring-blue-500 shadow-2xs"
+                  >
+                    <option value="">-- उपलब्ध दस्तावेज़ चुनें (Select Document) --</option>
+                    <option value="मार्कशीट (Marksheet)">मार्कशीट (Marksheet)</option>
+                    <option value="जन्म प्रमाण पत्र (Birth Certificate)">जन्म प्रमाण पत्र (Birth Certificate)</option>
+                    <option value="दोनों उपलब्ध हैं (Both - Marksheet & Birth Certificate)">दोनों उपलब्ध हैं (Both - Marksheet & Birth Certificate)</option>
+                  </select>
+                </div>
+              )}
             </div>
 
             {/* 5. AADHAAR STATUS & REASON */}
@@ -573,7 +725,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
                     <span className="w-4 h-4 rounded-full bg-blue-700 text-white text-[10px] font-bold flex items-center justify-center">1</span>
-                    <span>Is AADHAAR Provided ?</span>
+                    <span>Is AADHAAR Provided ? <span className="text-rose-500 font-bold">*</span></span>
                     <span className="text-slate-500 font-normal text-[11px]">(आधार उपलब्ध कराया गया है?)</span>
                   </label>
                   {isAadhaarProvided && (
@@ -585,7 +737,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
                   <button
                     type="button"
                     onClick={() => setIsAadhaarProvided('YES')}
@@ -619,7 +771,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
                     <span className="w-4 h-4 rounded-full bg-blue-700 text-white text-[10px] font-bold flex items-center justify-center">2</span>
-                    <span>Is AADHAAR Verified ?</span>
+                    <span>Is AADHAAR Verified ? <span className="text-rose-500 font-bold">*</span></span>
                     <span className="text-slate-500 font-normal text-[11px]">(आधार सत्यापित है?)</span>
                   </label>
                   {isAadhaarVerified && (
@@ -631,7 +783,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
                   <button
                     type="button"
                     onClick={() => setIsAadhaarVerified('YES')}
@@ -660,40 +812,54 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                 </div>
               </div>
 
-              {/* FIELD: Reason For Not Generated Apaar Id */}
-              <div className="space-y-1.5 pt-2 border-t border-slate-200">
-                <label className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
-                  <span className="w-4 h-4 rounded-full bg-blue-700 text-white text-[10px] font-bold flex items-center justify-center">3</span>
-                  <span>Reason For Not Generated Apaar Id</span>
-                  <span className="text-slate-500 font-normal text-[11px]">(अपार आईडी नहीं बनने का कारण)</span>
-                </label>
-
-                <select
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  className="w-full bg-white border border-slate-300 rounded-md py-2 px-3 text-xs text-slate-900 font-semibold focus:ring-2 focus:ring-blue-500 shadow-2xs"
-                >
-                  <option value="">-- कारण चुनें (Select Reason) --</option>
-                  {SURVEY_REASONS.map((r) => (
-                    <option key={r} value={r}>{r}</option>
-                  ))}
-                </select>
-
-                {(reason === 'Other' || reason === 'अन्य (Other)') && (
-                  <div className="mt-2 animate-in fade-in duration-150">
-                    <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">
-                      अन्य कारण लिखें (Specify Other Reason):
-                    </label>
-                    <input
-                      type="text"
-                      value={otherReason}
-                      onChange={(e) => setOtherReason(e.target.value)}
-                      placeholder="विस्तार से कारण लिखें..."
-                      className="w-full bg-white border border-slate-300 rounded-md py-1.5 px-2.5 text-xs text-slate-900"
-                    />
+              {/* FIELD: Reason For Not Generated Apaar Id (Hidden if all matched & verified) */}
+              {isAllMatchedAndYes ? (
+                <div className="pt-2 border-t border-slate-200 animate-in fade-in duration-150">
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 flex items-start space-x-2.5 text-xs text-emerald-800">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold">सभी विवरण सत्यापित एवं मिलान पूर्ण (All Details Matched & Verified)</span>
+                      <p className="text-[11px] text-emerald-700 mt-0.5">
+                        नाम, जन्मतिथि, आधार एवं दस्तावेज़ सत्यापित हैं। अपार आईडी लंबित रहने का कोई कारण नहीं है।
+                      </p>
+                    </div>
                   </div>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div className="space-y-1.5 pt-2 border-t border-slate-200 animate-in fade-in duration-150">
+                  <label className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
+                    <span className="w-4 h-4 rounded-full bg-blue-700 text-white text-[10px] font-bold flex items-center justify-center">3</span>
+                    <span>Reason For Not Generated Apaar Id <span className="text-rose-500 font-bold">*</span></span>
+                    <span className="text-slate-500 font-normal text-[11px]">(अपार आईडी नहीं बनने का कारण)</span>
+                  </label>
+
+                  <select
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-md py-2 px-3 text-xs text-slate-900 font-semibold focus:ring-2 focus:ring-blue-500 shadow-2xs"
+                  >
+                    <option value="">-- कारण चुनें (Select Reason) --</option>
+                    {SURVEY_REASONS.map((r) => (
+                      <option key={r} value={r}>{r}</option>
+                    ))}
+                  </select>
+
+                  {(reason === 'Other' || reason === 'अन्य (Other)') && (
+                    <div className="mt-2 animate-in fade-in duration-150">
+                      <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">
+                        अन्य कारण लिखें (Specify Other Reason): <span className="text-rose-500 font-bold">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={otherReason}
+                        onChange={(e) => setOtherReason(e.target.value)}
+                        placeholder="विस्तार से कारण लिखें..."
+                        className="w-full bg-white border border-slate-300 rounded-md py-1.5 px-2.5 text-xs text-slate-900"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Optional Remarks */}
@@ -721,7 +887,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="bg-slate-50 border-t border-slate-200 px-4 sm:px-5 py-3 flex flex-col sm:flex-row items-center justify-between gap-2.5 shrink-0">
+        <div className="bg-slate-50 border-t border-slate-200 px-3.5 sm:px-5 py-2.5 sm:py-3 flex flex-col sm:flex-row items-center justify-between gap-2.5 shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.04)]">
           
           {/* Prev / Next Student in Modal */}
           <div className="flex items-center space-x-1.5 w-full sm:w-auto justify-between sm:justify-start">
@@ -729,7 +895,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               type="button"
               onClick={onPrev}
               disabled={!hasPrev}
-              className="text-xs font-medium text-slate-700 hover:text-slate-900 bg-white border border-slate-300 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed px-3 py-1.5 rounded-md flex items-center space-x-1 cursor-pointer"
+              className="flex-1 sm:flex-none text-xs font-medium text-slate-700 hover:text-slate-900 bg-white border border-slate-300 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed px-3 py-2 sm:py-1.5 rounded-lg flex items-center justify-center space-x-1 cursor-pointer"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
               <span>पिछला (Prev)</span>
@@ -738,7 +904,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               type="button"
               onClick={onNext}
               disabled={!hasNext}
-              className="text-xs font-medium text-slate-700 hover:text-slate-900 bg-white border border-slate-300 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed px-3 py-1.5 rounded-md flex items-center space-x-1 cursor-pointer"
+              className="flex-1 sm:flex-none text-xs font-medium text-slate-700 hover:text-slate-900 bg-white border border-slate-300 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed px-3 py-2 sm:py-1.5 rounded-lg flex items-center justify-center space-x-1 cursor-pointer"
             >
               <span>अगला (Next)</span>
               <ChevronRight className="w-3.5 h-3.5" />
@@ -746,11 +912,11 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
           </div>
 
           {/* Save / Close buttons */}
-          <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
+          <div className="flex items-center space-x-1.5 sm:space-x-2 w-full sm:w-auto justify-end flex-wrap gap-y-1.5">
             <button
               type="button"
               onClick={onClose}
-              className="text-xs font-semibold text-slate-600 hover:text-slate-800 px-3.5 py-2 border border-slate-300 rounded-md hover:bg-slate-100 cursor-pointer"
+              className="flex-1 sm:flex-none text-xs font-semibold text-slate-600 hover:text-slate-800 px-3 sm:px-3.5 py-2.5 sm:py-2 border border-slate-300 rounded-lg hover:bg-slate-100 cursor-pointer text-center"
             >
               Close (बंद करें)
             </button>
@@ -759,7 +925,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               type="button"
               onClick={() => handleSave(false)}
               disabled={isSaving}
-              className="bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold px-4 py-2 rounded-md shadow-xs flex items-center space-x-1.5 cursor-pointer"
+              className="flex-1 sm:flex-none bg-slate-800 hover:bg-slate-900 active:bg-slate-950 text-white text-xs font-bold px-3.5 sm:px-4 py-2.5 sm:py-2 rounded-lg shadow-xs flex items-center justify-center space-x-1.5 cursor-pointer"
             >
               <Save className="w-3.5 h-3.5" />
               <span>{isSaving ? 'सहेजा जा रहा है...' : 'Save (सहेजें)'}</span>
@@ -770,7 +936,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                 type="button"
                 onClick={() => handleSave(true)}
                 disabled={isSaving}
-                className="bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold px-4 py-2 rounded-md shadow-xs flex items-center space-x-1.5 cursor-pointer"
+                className="w-full sm:w-auto bg-blue-700 hover:bg-blue-800 active:bg-blue-900 text-white text-xs font-bold px-4 py-2.5 sm:py-2 rounded-lg shadow-xs flex items-center justify-center space-x-1.5 cursor-pointer"
               >
                 <span>Save & Next</span>
                 <ArrowRight className="w-3.5 h-3.5" />

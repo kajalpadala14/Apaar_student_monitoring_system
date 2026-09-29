@@ -15,6 +15,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { SURVEY_REASONS, SURVEY_STATUS_OPTIONS } from '../../types/student';
+import { ReportPreviewModal, ReportPreviewData } from './ReportPreviewModal';
 
 export const ReportsView: React.FC = () => {
   const { students, filteredStudents, activeFilters, setActiveFilters, resetFilters, currentUser } = useStudents();
@@ -22,6 +23,7 @@ export const ReportsView: React.FC = () => {
   const [selectedReportView, setSelectedReportView] = useState<'block' | 'school' | 'reason' | 'detailed'>(
     currentUser?.role === 'SCHOOL_USER' ? 'school' : 'block'
   );
+  const [previewData, setPreviewData] = useState<ReportPreviewData | null>(null);
 
   // Dynamic filter options
   const blocks = useMemo(() => {
@@ -146,8 +148,45 @@ export const ReportsView: React.FC = () => {
       .sort((a, b) => b.count - a.count);
   }, [filteredStudents]);
 
-  // Export Handlers
-  const exportBlockExcel = () => {
+  // Preview Table Helpers
+  const detailedPreviewHeaders = [
+    'क्र.',
+    'ब्लॉक',
+    'संकुल',
+    'स्कूल का नाम',
+    'UDISE',
+    'कक्षा',
+    'पेन नंबर',
+    'विद्यार्थी नाम (मार्कशीट)',
+    'नाम मिलान',
+    'जन्मतिथि मिलान',
+    'दस्तावेज़ उपलब्धता',
+    'आधार उपलब्ध',
+    'अपार न बनने का कारण',
+    'सर्वे स्थिति',
+    'सर्वेयर'
+  ];
+
+  const studentToPreviewRow = (s: Student, idx: number) => [
+    idx + 1,
+    s.block_name || '',
+    s.sankul_name || '',
+    s.school_name || '',
+    s.udise_code || '',
+    s.class_name || '',
+    s.student_pen_number || '',
+    s.student_name_marksheet || '',
+    s.name_match_status || '-',
+    s.dob_match_status || '-',
+    s.documents_available || '-',
+    s.is_aadhaar_provided || '-',
+    s.apaar_pending_reason || '-',
+    s.survey_status || '',
+    s.surveyor_name || '-'
+  ];
+
+  // 1. Block Wise
+  const handlePreviewBlockExcel = () => {
     const rows = blockReportData.map((b) => ({
       'Block': b.block,
       'Total Students': b.total,
@@ -157,19 +196,39 @@ export const ReportsView: React.FC = () => {
       'Resolved': b.resolved,
       'Completion %': `${b.completionRate}%`
     }));
-    exportToExcel(rows, 'Dantewada_Block_Wise_APAAR_Report', 'Block_Summary');
-  };
-
-  const exportBlockPDF = () => {
-    generatePDFReport({
-      title: 'BLOCK-WISE APAAR PENDING SURVEY REPORT',
-      filename: 'Dantewada_Block_Wise_Report',
-      headers: ['Block', 'Total Students', 'Survey Completed', 'Survey Pending', 'Follow-up Req.', 'Resolved', 'Completion %'],
-      rows: blockReportData.map((b) => [b.block, b.total, b.completed, b.pending, b.followUp, b.resolved, `${b.completionRate}%`])
+    setPreviewData({
+      title: 'Block Wise Survey Report (ब्लॉक-वार सर्वेक्षण रिपोर्ट)',
+      format: 'excel',
+      filename: 'Dantewada_Block_Wise_APAAR_Report',
+      sheetName: 'Block_Summary',
+      headers: ['Block', 'Total Students', 'Survey Completed', 'Survey Pending', 'Follow-up Required', 'Resolved', 'Completion %'],
+      rows: blockReportData.map((b) => [b.block, b.total, b.completed, b.pending, b.followUp, b.resolved, `${b.completionRate}%`]),
+      totalRecords: blockReportData.length,
+      onDownload: () => exportToExcel(rows, 'Dantewada_Block_Wise_APAAR_Report', 'Block_Summary')
     });
   };
 
-  const exportSchoolExcel = () => {
+  const handlePreviewBlockPDF = () => {
+    const headers = ['Block', 'Total Students', 'Survey Completed', 'Survey Pending', 'Follow-up Req.', 'Resolved', 'Completion %'];
+    const rows = blockReportData.map((b) => [b.block, b.total, b.completed, b.pending, b.followUp, b.resolved, `${b.completionRate}%`]);
+    setPreviewData({
+      title: 'BLOCK-WISE APAAR PENDING SURVEY REPORT',
+      format: 'pdf',
+      filename: 'Dantewada_Block_Wise_Report',
+      headers,
+      rows,
+      totalRecords: rows.length,
+      onDownload: () => generatePDFReport({
+        title: 'BLOCK-WISE APAAR PENDING SURVEY REPORT',
+        filename: 'Dantewada_Block_Wise_Report',
+        headers,
+        rows
+      })
+    });
+  };
+
+  // 2. School Wise
+  const handlePreviewSchoolExcel = () => {
     const rows = schoolReportData.map((s) => ({
       'School Name': s.schoolName,
       'UDISE Code': s.udise,
@@ -180,28 +239,58 @@ export const ReportsView: React.FC = () => {
       'Resolved': s.resolved,
       'Completion %': `${s.total > 0 ? ((s.completed + s.resolved) / s.total * 100).toFixed(1) : 0}%`
     }));
-    exportToExcel(rows, 'Dantewada_School_Wise_APAAR_Report', 'School_Summary');
-  };
-
-  const exportSchoolPDF = () => {
-    generatePDFReport({
-      title: 'SCHOOL-WISE APAAR PENDING SURVEY REPORT',
-      filename: 'Dantewada_School_Wise_Report',
-      headers: ['School Name', 'UDISE Code', 'Block', 'Total Students', 'Completed', 'Pending', 'Resolved', 'Completion %'],
-      rows: schoolReportData.map((s) => [
-        s.schoolName,
-        s.udise,
-        s.block,
-        s.total,
-        s.completed,
-        s.pending,
-        s.resolved,
-        `${s.total > 0 ? ((s.completed + s.resolved) / s.total * 100).toFixed(1) : 0}%`
-      ])
+    const previewRows = schoolReportData.map((s) => [
+      s.schoolName,
+      s.udise,
+      s.block,
+      s.total,
+      s.completed,
+      s.pending,
+      s.resolved,
+      `${s.total > 0 ? ((s.completed + s.resolved) / s.total * 100).toFixed(1) : 0}%`
+    ]);
+    setPreviewData({
+      title: 'School Wise Survey Report (स्कूल-वार सर्वेक्षण रिपोर्ट)',
+      format: 'excel',
+      filename: 'Dantewada_School_Wise_APAAR_Report',
+      sheetName: 'School_Summary',
+      headers: ['School Name', 'UDISE Code', 'Block', 'Total Students', 'Survey Completed', 'Survey Pending', 'Resolved', 'Completion %'],
+      rows: previewRows,
+      totalRecords: schoolReportData.length,
+      onDownload: () => exportToExcel(rows, 'Dantewada_School_Wise_APAAR_Report', 'School_Summary')
     });
   };
 
-  const exportReasonExcel = () => {
+  const handlePreviewSchoolPDF = () => {
+    const headers = ['School Name', 'UDISE Code', 'Block', 'Total Students', 'Completed', 'Pending', 'Resolved', 'Completion %'];
+    const rows = schoolReportData.map((s) => [
+      s.schoolName,
+      s.udise,
+      s.block,
+      s.total,
+      s.completed,
+      s.pending,
+      s.resolved,
+      `${s.total > 0 ? ((s.completed + s.resolved) / s.total * 100).toFixed(1) : 0}%`
+    ]);
+    setPreviewData({
+      title: 'SCHOOL-WISE APAAR PENDING SURVEY REPORT',
+      format: 'pdf',
+      filename: 'Dantewada_School_Wise_Report',
+      headers,
+      rows,
+      totalRecords: rows.length,
+      onDownload: () => generatePDFReport({
+        title: 'SCHOOL-WISE APAAR PENDING SURVEY REPORT',
+        filename: 'Dantewada_School_Wise_Report',
+        headers,
+        rows
+      })
+    });
+  };
+
+  // 3. Reason Wise
+  const handlePreviewReasonExcel = () => {
     const rows = reasonReportData.map((r) => ({
       'Reason': r.reason,
       'Student Count': r.count,
@@ -210,39 +299,228 @@ export const ReportsView: React.FC = () => {
       'Follow-up Required': r.followUp,
       'Resolved': r.resolved
     }));
-    exportToExcel(rows, 'Dantewada_Reason_Wise_APAAR_Report', 'Reason_Analysis');
-  };
-
-  const exportReasonPDF = () => {
-    generatePDFReport({
-      title: 'REASON-WISE APAAR PENDING ANALYSIS REPORT',
-      filename: 'Dantewada_Reason_Wise_Report',
-      headers: ['Pending Reason', 'Student Count', 'Percentage %', 'Completed', 'Follow-up Req.', 'Resolved'],
-      rows: reasonReportData.map((r) => [r.reason, r.count, `${r.percentage}%`, r.completed, r.followUp, r.resolved])
+    const previewRows = reasonReportData.map((r) => [
+      r.reason,
+      r.count,
+      `${r.percentage}%`,
+      r.completed,
+      r.followUp,
+      r.resolved
+    ]);
+    setPreviewData({
+      title: 'Reason Wise Analysis Report (कारण-वार विश्लेषण रिपोर्ट)',
+      format: 'excel',
+      filename: 'Dantewada_Reason_Wise_APAAR_Report',
+      sheetName: 'Reason_Analysis',
+      headers: ['Reason', 'Student Count', 'Percentage', 'Survey Completed', 'Follow-up Required', 'Resolved'],
+      rows: previewRows,
+      totalRecords: reasonReportData.length,
+      onDownload: () => exportToExcel(rows, 'Dantewada_Reason_Wise_APAAR_Report', 'Reason_Analysis')
     });
   };
 
-  const exportDetailedExcel = () => {
-    exportStudentDetailedReport(filteredStudents, 'Dantewada_Detailed_Student_Survey_Report');
+  const handlePreviewReasonPDF = () => {
+    const headers = ['Pending Reason', 'Student Count', 'Percentage %', 'Completed', 'Follow-up Req.', 'Resolved'];
+    const rows = reasonReportData.map((r) => [r.reason, r.count, `${r.percentage}%`, r.completed, r.followUp, r.resolved]);
+    setPreviewData({
+      title: 'REASON-WISE APAAR PENDING ANALYSIS REPORT',
+      format: 'pdf',
+      filename: 'Dantewada_Reason_Wise_Report',
+      headers,
+      rows,
+      totalRecords: rows.length,
+      onDownload: () => generatePDFReport({
+        title: 'REASON-WISE APAAR PENDING ANALYSIS REPORT',
+        filename: 'Dantewada_Reason_Wise_Report',
+        headers,
+        rows
+      })
+    });
   };
 
-  const exportDetailedPDF = () => {
-    const rows = filteredStudents.slice(0, 100).map((s, idx) => [
+  // 4. Survey Status
+  const handlePreviewStatusExcel = () => {
+    const statusStats = [
+      { status: 'SURVEY COMPLETED', count: filteredStudents.filter((s) => s.survey_status === 'SURVEY COMPLETED').length },
+      { status: 'PENDING', count: filteredStudents.filter((s) => s.survey_status === 'PENDING').length },
+      { status: 'FOLLOW-UP REQUIRED', count: filteredStudents.filter((s) => s.survey_status === 'FOLLOW-UP REQUIRED').length },
+      { status: 'RESOLVED', count: filteredStudents.filter((s) => s.survey_status === 'RESOLVED').length },
+    ];
+    const total = filteredStudents.length;
+    const rows = statusStats.map((s) => ({
+      'Survey Status': s.status,
+      'Student Count': s.count,
+      'Percentage': `${total > 0 ? ((s.count / total) * 100).toFixed(1) : 0}%`
+    }));
+    setPreviewData({
+      title: 'Survey Status Summary Report (सर्वेक्षण स्थिति रिपोर्ट)',
+      format: 'excel',
+      filename: 'Dantewada_Survey_Status_Report',
+      sheetName: 'Status_Summary',
+      headers: ['Survey Status', 'Student Count', 'Percentage %'],
+      rows: statusStats.map((s) => [s.status, s.count, `${total > 0 ? ((s.count / total) * 100).toFixed(1) : 0}%`]),
+      totalRecords: statusStats.length,
+      onDownload: () => exportToExcel(rows, 'Dantewada_Survey_Status_Report', 'Status_Summary')
+    });
+  };
+
+  const handlePreviewStatusPDF = () => {
+    const statusStats = [
+      { status: 'SURVEY COMPLETED', count: filteredStudents.filter((s) => s.survey_status === 'SURVEY COMPLETED').length },
+      { status: 'PENDING', count: filteredStudents.filter((s) => s.survey_status === 'PENDING').length },
+      { status: 'FOLLOW-UP REQUIRED', count: filteredStudents.filter((s) => s.survey_status === 'FOLLOW-UP REQUIRED').length },
+      { status: 'RESOLVED', count: filteredStudents.filter((s) => s.survey_status === 'RESOLVED').length },
+    ];
+    const total = filteredStudents.length;
+    const headers = ['Survey Status', 'Student Count', 'Percentage %'];
+    const rows = statusStats.map((s) => [s.status, s.count, `${total > 0 ? ((s.count / total) * 100).toFixed(1) : 0}%`]);
+    setPreviewData({
+      title: 'SURVEY STATUS SUMMARY REPORT',
+      format: 'pdf',
+      filename: 'Dantewada_Survey_Status_Report',
+      headers,
+      rows,
+      totalRecords: rows.length,
+      onDownload: () => generatePDFReport({
+        title: 'SURVEY STATUS SUMMARY REPORT',
+        filename: 'Dantewada_Survey_Status_Report',
+        headers,
+        rows
+      })
+    });
+  };
+
+  // 5. Pending Survey
+  const handlePreviewPendingExcel = () => {
+    const pendings = filteredStudents.filter((s) => s.survey_status === 'PENDING');
+    const rows = pendings.map(studentToPreviewRow);
+    setPreviewData({
+      title: 'Pending Survey Students Report (लंबित सर्वेक्षण विद्यार्थी सूची)',
+      format: 'excel',
+      filename: 'Dantewada_Pending_Students_Report',
+      sheetName: 'Pending_Students',
+      headers: detailedPreviewHeaders,
+      rows,
+      totalRecords: pendings.length,
+      onDownload: () => exportStudentDetailedReport(pendings, 'Dantewada_Pending_Students_Report')
+    });
+  };
+
+  const handlePreviewPendingPDF = () => {
+    const pendings = filteredStudents.filter((s) => s.survey_status === 'PENDING');
+    const pdfHeaders = ['S.No', 'Block', 'Cluster', 'School Name', 'Student Name', 'PEN', 'Reason', 'Status'];
+    const pdfRows = pendings.slice(0, 100).map((s, idx) => [
       idx + 1,
-      s.block_name,
-      s.sankul_name,
-      s.school_name,
-      s.student_name_marksheet,
-      s.student_pen_number,
+      s.block_name || '-',
+      s.sankul_name || '-',
+      s.school_name || '-',
+      s.student_name_marksheet || '-',
+      s.student_pen_number || '-',
+      s.apaar_pending_reason || '-',
+      s.survey_status || '-'
+    ]);
+    setPreviewData({
+      title: 'PENDING SURVEY STUDENTS REPORT (Top 100 Snapshot)',
+      format: 'pdf',
+      filename: 'Dantewada_Pending_Students_PDF',
+      headers: pdfHeaders,
+      rows: pdfRows,
+      totalRecords: pendings.length,
+      onDownload: () => generatePDFReport({
+        title: 'PENDING SURVEY STUDENTS REPORT (Top 100 Snapshot)',
+        filename: 'Dantewada_Pending_Students_PDF',
+        headers: pdfHeaders,
+        rows: pdfRows
+      })
+    });
+  };
+
+  // 6. Completed Survey
+  const handlePreviewCompletedExcel = () => {
+    const completed = filteredStudents.filter((s) => s.survey_status === 'SURVEY COMPLETED');
+    const rows = completed.map(studentToPreviewRow);
+    setPreviewData({
+      title: 'Completed Survey Students Report (पूर्ण सर्वेक्षण विद्यार्थी सूची)',
+      format: 'excel',
+      filename: 'Dantewada_Completed_Survey_Report',
+      sheetName: 'Completed_Survey',
+      headers: detailedPreviewHeaders,
+      rows,
+      totalRecords: completed.length,
+      onDownload: () => exportStudentDetailedReport(completed, 'Dantewada_Completed_Survey_Report')
+    });
+  };
+
+  const handlePreviewCompletedPDF = () => {
+    const completed = filteredStudents.filter((s) => s.survey_status === 'SURVEY COMPLETED');
+    const pdfHeaders = ['S.No', 'Block', 'Cluster', 'School Name', 'Student Name', 'PEN', 'Reason', 'Status'];
+    const pdfRows = completed.slice(0, 100).map((s, idx) => [
+      idx + 1,
+      s.block_name || '-',
+      s.sankul_name || '-',
+      s.school_name || '-',
+      s.student_name_marksheet || '-',
+      s.student_pen_number || '-',
+      s.apaar_pending_reason || '-',
+      s.survey_status || '-'
+    ]);
+    setPreviewData({
+      title: 'COMPLETED SURVEY STUDENTS REPORT (Top 100 Snapshot)',
+      format: 'pdf',
+      filename: 'Dantewada_Completed_Survey_PDF',
+      headers: pdfHeaders,
+      rows: pdfRows,
+      totalRecords: completed.length,
+      onDownload: () => generatePDFReport({
+        title: 'COMPLETED SURVEY STUDENTS REPORT (Top 100 Snapshot)',
+        filename: 'Dantewada_Completed_Survey_PDF',
+        headers: pdfHeaders,
+        rows: pdfRows
+      })
+    });
+  };
+
+  // 7. Master Detailed Survey
+  const handlePreviewDetailedExcel = () => {
+    const rows = filteredStudents.map(studentToPreviewRow);
+    setPreviewData({
+      title: 'Detailed Student Survey Master Report (मास्टर विद्यार्थी सर्वेक्षण विस्तृत रिपोर्ट)',
+      format: 'excel',
+      filename: 'Dantewada_Detailed_Student_Survey_Report',
+      sheetName: 'Student_Survey',
+      headers: detailedPreviewHeaders,
+      rows,
+      totalRecords: filteredStudents.length,
+      onDownload: () => exportStudentDetailedReport(filteredStudents, 'Dantewada_Detailed_Student_Survey_Report')
+    });
+  };
+
+  const handlePreviewDetailedPDF = () => {
+    const pdfHeaders = ['S.No', 'Block', 'Cluster Name', 'School Name', 'Student Name', 'PEN', 'Reason', 'Aadhaar Provided', 'Status'];
+    const pdfRows = filteredStudents.slice(0, 100).map((s, idx) => [
+      idx + 1,
+      s.block_name || '-',
+      s.sankul_name || '-',
+      s.school_name || '-',
+      s.student_name_marksheet || '-',
+      s.student_pen_number || '-',
       s.apaar_pending_reason || '-',
       s.is_aadhaar_provided || '-',
-      s.survey_status
+      s.survey_status || '-'
     ]);
-    generatePDFReport({
+    setPreviewData({
       title: 'DETAILED STUDENT SURVEY MASTER REPORT (Top 100 Snapshot)',
       filename: 'Dantewada_Student_Survey_Master',
-      headers: ['S.No', 'Block', 'Cluster Name', 'School Name', 'Student Name', 'PEN', 'Reason', 'Aadhaar Provided', 'Status'],
-      rows
+      format: 'pdf',
+      headers: pdfHeaders,
+      rows: pdfRows,
+      totalRecords: filteredStudents.length,
+      onDownload: () => generatePDFReport({
+        title: 'DETAILED STUDENT SURVEY MASTER REPORT (Top 100 Snapshot)',
+        filename: 'Dantewada_Student_Survey_Master',
+        headers: pdfHeaders,
+        rows: pdfRows
+      })
     });
   };
 
@@ -374,14 +652,14 @@ export const ReportsView: React.FC = () => {
             </div>
             <div className="mt-4 pt-3 border-t border-slate-100 flex items-center space-x-2">
               <button
-                onClick={exportBlockExcel}
+                onClick={handlePreviewBlockExcel}
                 className="flex-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-semibold py-1.5 px-2 rounded flex items-center justify-center space-x-1 cursor-pointer"
               >
                 <FileSpreadsheet className="w-3.5 h-3.5" />
                 <span>Excel</span>
               </button>
               <button
-                onClick={exportBlockPDF}
+                onClick={handlePreviewBlockPDF}
                 className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-300 text-xs font-semibold py-1.5 px-2 rounded flex items-center justify-center space-x-1 cursor-pointer"
               >
                 <FileText className="w-3.5 h-3.5" />
@@ -404,14 +682,14 @@ export const ReportsView: React.FC = () => {
           </div>
           <div className="mt-4 pt-3 border-t border-slate-100 flex items-center space-x-2">
             <button
-              onClick={exportSchoolExcel}
+              onClick={handlePreviewSchoolExcel}
               className="flex-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-semibold py-1.5 px-2 rounded flex items-center justify-center space-x-1 cursor-pointer"
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
               <span>Excel</span>
             </button>
             <button
-              onClick={exportSchoolPDF}
+              onClick={handlePreviewSchoolPDF}
               className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-300 text-xs font-semibold py-1.5 px-2 rounded flex items-center justify-center space-x-1 cursor-pointer"
             >
               <FileText className="w-3.5 h-3.5" />
@@ -433,14 +711,14 @@ export const ReportsView: React.FC = () => {
           </div>
           <div className="mt-4 pt-3 border-t border-slate-100 flex items-center space-x-2">
             <button
-              onClick={exportReasonExcel}
+              onClick={handlePreviewReasonExcel}
               className="flex-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-semibold py-1.5 px-2 rounded flex items-center justify-center space-x-1 cursor-pointer"
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
               <span>Excel</span>
             </button>
             <button
-              onClick={exportReasonPDF}
+              onClick={handlePreviewReasonPDF}
               className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-300 text-xs font-semibold py-1.5 px-2 rounded flex items-center justify-center space-x-1 cursor-pointer"
             >
               <FileText className="w-3.5 h-3.5" />
@@ -462,14 +740,14 @@ export const ReportsView: React.FC = () => {
           </div>
           <div className="mt-4 pt-3 border-t border-slate-100 flex items-center space-x-2">
             <button
-              onClick={exportBlockExcel}
+              onClick={handlePreviewStatusExcel}
               className="flex-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-semibold py-1.5 px-2 rounded flex items-center justify-center space-x-1 cursor-pointer"
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
               <span>Excel</span>
             </button>
             <button
-              onClick={exportBlockPDF}
+              onClick={handlePreviewStatusPDF}
               className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-300 text-xs font-semibold py-1.5 px-2 rounded flex items-center justify-center space-x-1 cursor-pointer"
             >
               <FileText className="w-3.5 h-3.5" />
@@ -491,17 +769,14 @@ export const ReportsView: React.FC = () => {
           </div>
           <div className="mt-4 pt-3 border-t border-slate-100 flex items-center space-x-2">
             <button
-              onClick={() => {
-                const pendings = filteredStudents.filter((s) => s.survey_status === 'PENDING');
-                exportStudentDetailedReport(pendings, 'Dantewada_Pending_Students_Report');
-              }}
+              onClick={handlePreviewPendingExcel}
               className="flex-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-semibold py-1.5 px-2 rounded flex items-center justify-center space-x-1 cursor-pointer"
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
               <span>Excel</span>
             </button>
             <button
-              onClick={exportDetailedPDF}
+              onClick={handlePreviewPendingPDF}
               className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-300 text-xs font-semibold py-1.5 px-2 rounded flex items-center justify-center space-x-1 cursor-pointer"
             >
               <FileText className="w-3.5 h-3.5" />
@@ -523,17 +798,14 @@ export const ReportsView: React.FC = () => {
           </div>
           <div className="mt-4 pt-3 border-t border-slate-100 flex items-center space-x-2">
             <button
-              onClick={() => {
-                const completed = filteredStudents.filter((s) => s.survey_status === 'SURVEY COMPLETED');
-                exportStudentDetailedReport(completed, 'Dantewada_Completed_Survey_Report');
-              }}
+              onClick={handlePreviewCompletedExcel}
               className="flex-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-semibold py-1.5 px-2 rounded flex items-center justify-center space-x-1 cursor-pointer"
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
               <span>Excel</span>
             </button>
             <button
-              onClick={exportDetailedPDF}
+              onClick={handlePreviewCompletedPDF}
               className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-300 text-xs font-semibold py-1.5 px-2 rounded flex items-center justify-center space-x-1 cursor-pointer"
             >
               <FileText className="w-3.5 h-3.5" />
@@ -543,27 +815,27 @@ export const ReportsView: React.FC = () => {
         </div>
 
         {/* Card 7: Detailed Student Survey Master Report */}
-        <div className="sm:col-span-2 bg-gradient-to-r from-blue-900 to-slate-900 text-white border border-blue-950 rounded-lg p-4 shadow-sm flex flex-col justify-between">
+        <div className="col-span-1 sm:col-span-2 lg:col-span-3 xl:col-span-4 bg-linear-to-r from-blue-900 to-slate-900 text-white border border-blue-950 rounded-lg p-4 sm:p-5 shadow-sm flex flex-col justify-between">
           <div>
             <span className="text-[10px] font-bold text-blue-200 bg-blue-800/80 px-2 py-0.5 rounded uppercase">
               Complete Dataset Export
             </span>
-            <h3 className="text-sm font-bold text-white mt-2">7. Detailed Student Survey Report (Master)</h3>
-            <p className="text-xs text-slate-300 mt-1">
+            <h3 className="text-sm sm:text-base font-bold text-white mt-2">7. Detailed Student Survey Report (Master)</h3>
+            <p className="text-xs text-slate-300 mt-1 max-w-4xl">
               Full student records export matching the 19 original Excel columns + all survey answers, action items, remarks, surveyor names, and dates.
             </p>
           </div>
-          <div className="mt-4 pt-3 border-t border-blue-800/60 flex items-center space-x-3">
+          <div className="mt-4 pt-3 border-t border-blue-800/60 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3">
             <button
-              onClick={exportDetailedExcel}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-2 px-4 rounded-md shadow-xs flex items-center space-x-1.5 cursor-pointer"
+              onClick={handlePreviewDetailedExcel}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-2.5 sm:py-2 px-4 rounded-md shadow-xs flex items-center justify-center space-x-1.5 cursor-pointer"
             >
               <FileSpreadsheet className="w-4 h-4" />
               <span>Export Full Excel (.xlsx)</span>
             </button>
             <button
-              onClick={exportDetailedPDF}
-              className="bg-blue-700 hover:bg-blue-600 text-white text-xs font-bold py-2 px-4 rounded-md shadow-xs flex items-center space-x-1.5 cursor-pointer"
+              onClick={handlePreviewDetailedPDF}
+              className="bg-blue-700 hover:bg-blue-600 text-white text-xs font-bold py-2.5 sm:py-2 px-4 rounded-md shadow-xs flex items-center justify-center space-x-1.5 cursor-pointer"
             >
               <FileText className="w-4 h-4" />
               <span>Export PDF Snapshot</span>
@@ -722,6 +994,12 @@ export const ReportsView: React.FC = () => {
         )}
 
       </div>
+
+      {/* Report Preview Modal */}
+      <ReportPreviewModal
+        data={previewData}
+        onClose={() => setPreviewData(null)}
+      />
 
     </div>
   );
