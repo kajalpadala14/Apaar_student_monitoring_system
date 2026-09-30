@@ -179,9 +179,18 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
     }
   };
 
+  // Compute Name and DOB Match Status automatically
+  const resolvedNameMatchStatus = (studentNameMarksheet.trim() && studentNameAadhaar.trim())
+    ? (studentNameMarksheet.trim().toLowerCase() === studentNameAadhaar.trim().toLowerCase() ? 'Match' : 'Mismatch')
+    : (nameMatchStatus || (isAadhaarProvided === 'NO' ? 'Mismatch' : ''));
+
+  const resolvedDobMatchStatus = (dobMarksheet.trim() && dobAadhaar.trim())
+    ? (dobMarksheet.trim() === dobAadhaar.trim() ? 'Match' : 'Mismatch')
+    : (dobMatchStatus || (isAadhaarProvided === 'NO' ? 'Mismatch' : ''));
+
   // Check if all verification checks are matched and YES
-  const isNameMatched = nameMatchStatus?.trim().toLowerCase() === 'match';
-  const isDobMatched = dobMatchStatus?.trim().toLowerCase() === 'match';
+  const isNameMatched = resolvedNameMatchStatus?.trim().toLowerCase() === 'match';
+  const isDobMatched = resolvedDobMatchStatus?.trim().toLowerCase() === 'match';
   const isAadhaarYes = isAadhaarProvided?.trim().toUpperCase() === 'YES';
   const isVerifiedYes = isAadhaarVerified?.trim().toUpperCase() === 'YES';
   const isDocsNotNo = !documentsAvailable || documentsAvailable?.trim().toUpperCase() !== 'NO';
@@ -199,10 +208,10 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   const getPayload = (): Partial<Student> => ({
     student_name_marksheet: studentNameMarksheet,
     student_name_aadhaar: isAadhaarProvided === 'NO' ? '' : studentNameAadhaar,
-    name_match_status: nameMatchStatus,
+    name_match_status: resolvedNameMatchStatus,
     dob_marksheet: dobMarksheet,
     dob_aadhaar: isAadhaarProvided === 'NO' ? '' : dobAadhaar,
-    dob_match_status: dobMatchStatus,
+    dob_match_status: resolvedDobMatchStatus,
     father_name: fatherName,
     district_name: districtName,
     student_district: districtName,
@@ -248,9 +257,6 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
     if (isAadhaarProvided !== 'NO' && !studentNameAadhaar.trim()) {
       errors.push('विद्यार्थी का नाम (आधार अनुसार)');
     }
-    if (!nameMatchStatus) {
-      errors.push('Name Match Status (Match या Mismatch चुनें)');
-    }
 
     // 3. DOB Section
     if (!dobMarksheet.trim()) {
@@ -258,9 +264,6 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
     }
     if (isAadhaarProvided !== 'NO' && !dobAadhaar.trim()) {
       errors.push('जन्मतिथि (आधार अनुसार)');
-    }
-    if (!dobMatchStatus) {
-      errors.push('DOB Match Status (Match या Mismatch चुनें)');
     }
 
     // 4. Father & District
@@ -547,22 +550,12 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               </div>
             </div>
 
-            {/* 2. NAME VERIFICATION SECTION */}
+            {/* 2. NAME SECTION */}
             <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
-                  <User className="w-4 h-4 text-blue-700" />
-                  <span>Name (विद्यार्थी का नाम) <span className="text-rose-500 font-bold">*</span></span>
-                </label>
-                {nameMatchStatus && (
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded flex items-center space-x-1 ${
-                    nameMatchStatus === 'Match' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-rose-100 text-rose-800 border border-rose-300'
-                  }`}>
-                    {nameMatchStatus === 'Match' ? <Check className="w-3 h-3 inline mr-0.5" /> : <AlertCircle className="w-3 h-3 inline mr-0.5" />}
-                    <span>{nameMatchStatus === 'Match' ? 'Name Matched' : 'Name Mismatch'}</span>
-                  </span>
-                )}
-              </div>
+              <label className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
+                <User className="w-4 h-4 text-blue-700" />
+                <span>Name (विद्यार्थी का नाम) <span className="text-rose-500 font-bold">*</span></span>
+              </label>
 
               <div className={`grid grid-cols-1 ${isAadhaarProvided === 'NO' ? '' : 'sm:grid-cols-2'} gap-3`}>
                 {/* Marksheet-wise Name */}
@@ -595,58 +588,14 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                   </div>
                 )}
               </div>
-
-              {/* Name Match Status Buttons */}
-              <div>
-                <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
-                  Name Match Status: <span className="text-rose-500 font-bold">*</span>
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setNameMatchStatus('Match')}
-                    className={`py-2 sm:py-1.5 px-3 rounded-md border text-xs font-semibold flex items-center justify-center space-x-1.5 transition-all cursor-pointer ${
-                      nameMatchStatus === 'Match'
-                        ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs'
-                        : 'bg-white text-slate-700 border-slate-300 hover:bg-emerald-50'
-                    }`}
-                  >
-                    <Check className="w-3.5 h-3.5" />
-                    <span>Match (नाम समान है)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setNameMatchStatus('Mismatch')}
-                    className={`py-2 sm:py-1.5 px-3 rounded-md border text-xs font-semibold flex items-center justify-center space-x-1.5 transition-all cursor-pointer ${
-                      nameMatchStatus === 'Mismatch'
-                        ? 'bg-rose-600 text-white border-rose-700 shadow-2xs'
-                        : 'bg-white text-slate-700 border-slate-300 hover:bg-rose-50'
-                    }`}
-                  >
-                    <Ban className="w-3.5 h-3.5" />
-                    <span>Mismatch (नाम भिन्न है)</span>
-                  </button>
-                </div>
-              </div>
             </div>
 
             {/* 3. DATE OF BIRTH (D.O.B.) SECTION */}
             <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
-                  <Calendar className="w-4 h-4 text-blue-700" />
-                  <span>Date of Birth (D.O.B. / जन्मतिथि) <span className="text-rose-500 font-bold">*</span></span>
-                </label>
-                {dobMatchStatus && (
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded flex items-center space-x-1 ${
-                    dobMatchStatus === 'Match' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-rose-100 text-rose-800 border border-rose-300'
-                  }`}>
-                    {dobMatchStatus === 'Match' ? <Check className="w-3 h-3 inline mr-0.5" /> : <AlertCircle className="w-3 h-3 inline mr-0.5" />}
-                    <span>{dobMatchStatus === 'Match' ? 'DOB Matched' : 'DOB Mismatch'}</span>
-                  </span>
-                )}
-              </div>
+              <label className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
+                <Calendar className="w-4 h-4 text-blue-700" />
+                <span>Date of Birth (D.O.B. / जन्मतिथि) <span className="text-rose-500 font-bold">*</span></span>
+              </label>
 
               <div className={`grid grid-cols-1 ${isAadhaarProvided === 'NO' ? '' : 'sm:grid-cols-2'} gap-3`}>
                 {/* Marksheet-wise DOB */}
@@ -678,40 +627,6 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                     />
                   </div>
                 )}
-              </div>
-
-              {/* DOB Match Status Buttons */}
-              <div>
-                <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
-                  DOB Match Status: <span className="text-rose-500 font-bold">*</span>
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setDobMatchStatus('Match')}
-                    className={`py-2 sm:py-1.5 px-3 rounded-md border text-xs font-semibold flex items-center justify-center space-x-1.5 transition-all cursor-pointer ${
-                      dobMatchStatus === 'Match'
-                        ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs'
-                        : 'bg-white text-slate-700 border-slate-300 hover:bg-emerald-50'
-                    }`}
-                  >
-                    <Check className="w-3.5 h-3.5" />
-                    <span>Match (DOB समान है)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setDobMatchStatus('Mismatch')}
-                    className={`py-2 sm:py-1.5 px-3 rounded-md border text-xs font-semibold flex items-center justify-center space-x-1.5 transition-all cursor-pointer ${
-                      dobMatchStatus === 'Mismatch'
-                        ? 'bg-rose-600 text-white border-rose-700 shadow-2xs'
-                        : 'bg-white text-slate-700 border-slate-300 hover:bg-rose-50'
-                    }`}
-                  >
-                    <Ban className="w-3.5 h-3.5" />
-                    <span>Mismatch (DOB भिन्न है)</span>
-                  </button>
-                </div>
               </div>
             </div>
 
