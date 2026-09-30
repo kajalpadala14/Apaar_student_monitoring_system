@@ -282,8 +282,6 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
     if (!isAllMatchedAndYes) {
       if (!reason) {
         errors.push('अपार आईडी नहीं बनने का कारण (Select Reason)');
-      } else if ((reason === 'Other' || reason === 'अन्य (Other)') && !otherReason.trim()) {
-        errors.push('अन्य कारण का विवरण लिखें (Specify Other Reason)');
       }
     }
 
@@ -860,21 +858,6 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                       <option key={r} value={r}>{r}</option>
                     ))}
                   </select>
-
-                  {(reason === 'Other' || reason === 'अन्य (Other)') && (
-                    <div className="mt-2 animate-in fade-in duration-150">
-                      <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">
-                        अन्य कारण लिखें (Specify Other Reason): <span className="text-rose-500 font-bold">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={otherReason}
-                        onChange={(e) => setOtherReason(e.target.value)}
-                        placeholder="विस्तार से कारण लिखें..."
-                        className="w-full bg-white border border-slate-300 rounded-md py-1.5 px-2.5 text-xs text-slate-900"
-                      />
-                    </div>
-                  )}
                 </div>
               )}
             </div>
