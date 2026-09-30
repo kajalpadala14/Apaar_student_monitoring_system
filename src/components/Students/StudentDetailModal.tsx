@@ -288,6 +288,11 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
       }
     }
 
+    // 7. Remarks if mandatory (when shown)
+    if (shouldShowRemarks && !remarks.trim()) {
+      errors.push('रिमार्क्स / टिप्पणी (Remarks)');
+    }
+
     if (errors.length > 0) {
       setValidationErrors(errors);
       const scrollContainer = document.getElementById('survey-modal-scroll');
@@ -777,7 +782,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
             {shouldShowRemarks && (
               <div className="bg-slate-50 p-3 sm:p-3.5 rounded-lg border border-slate-200 animate-in fade-in duration-150 space-y-1.5">
                 <label className="block text-[11px] font-bold text-slate-700">
-                  रिमार्क्स / टिप्पणी (Remarks):
+                  रिमार्क्स / टिप्पणी (Remarks) <span className="text-rose-500 font-bold">*</span>:
                 </label>
                 <input
                   type="text"
