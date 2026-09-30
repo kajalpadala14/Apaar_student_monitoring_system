@@ -189,12 +189,19 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   // When both Name & DOB match, and Aadhaar provided/verified are YES (and documents not NO), no pending reason is needed
   const isAllMatchedAndYes = isNameMatched && isDobMatched && isAadhaarYes && isVerifiedYes && isDocsNotNo;
 
+  // Remarks are only shown and saved when one of the two UDISE portal entry reasons is selected
+  const shouldShowRemarks =
+    !isAllMatchedAndYes &&
+    (reason === 'आधार कार्ड उपलब्ध हैं एवं UDISE पोर्टल में एंट्री पूर्ण कर लिया गया हैं ।।' ||
+     reason === 'आधार कार्ड उपलब्ध हैं परन्तु UDISE पोर्टल में एंट्री नहीं हुआ हैं' ||
+     (reason.includes('आधार कार्ड उपलब्ध हैं') && reason.includes('UDISE पोर्टल')));
+
   const getPayload = (): Partial<Student> => ({
     student_name_marksheet: studentNameMarksheet,
-    student_name_aadhaar: studentNameAadhaar,
+    student_name_aadhaar: isAadhaarProvided === 'NO' ? '' : studentNameAadhaar,
     name_match_status: nameMatchStatus,
     dob_marksheet: dobMarksheet,
-    dob_aadhaar: dobAadhaar,
+    dob_aadhaar: isAadhaarProvided === 'NO' ? '' : dobAadhaar,
     dob_match_status: dobMatchStatus,
     father_name: fatherName,
     district_name: districtName,
@@ -206,7 +213,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
     is_aadhaar_verified: isAadhaarVerified,
     apaar_pending_reason: isAllMatchedAndYes ? '' : reason,
     other_reason: isAllMatchedAndYes ? '' : (reason === 'Other' || reason === 'अन्य (Other)' ? otherReason : ''),
-    remarks,
+    remarks: shouldShowRemarks ? remarks : '',
     survey_status: (isAllMatchedAndYes || reason || isAadhaarProvided || documentsAvailable || nameMatchStatus || dobMatchStatus) ? 'SURVEY COMPLETED' : surveyStatus,
     surveyor_name: currentUser?.name || 'Surveyor',
     survey_date: new Date().toISOString(),
@@ -226,7 +233,15 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   const handleSave = async (autoAdvance: boolean = false) => {
     const errors: string[] = [];
 
-    // 1. Name Section
+    // 1. Aadhaar Provided & Verified (सबसे पहले)
+    if (!isAadhaarProvided) {
+      errors.push('1. Is AADHAAR Provided ? (आधार उपलब्ध कराया गया है? - YES या NO चुनें)');
+    }
+    if (!isAadhaarVerified) {
+      errors.push('2. Is AADHAAR Verified ? (आधार सत्यापित है? - YES या NO चुनें)');
+    }
+
+    // 2. Name Section
     if (!studentNameMarksheet.trim()) {
       errors.push('विद्यार्थी का नाम (मार्कशीट अनुसार)');
     }
@@ -237,7 +252,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
       errors.push('Name Match Status (Match या Mismatch चुनें)');
     }
 
-    // 2. DOB Section
+    // 3. DOB Section
     if (!dobMarksheet.trim()) {
       errors.push('जन्मतिथि (मार्कशीट अनुसार)');
     }
@@ -248,7 +263,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
       errors.push('DOB Match Status (Match या Mismatch चुनें)');
     }
 
-    // 3. Father & District
+    // 4. Father & District
     if (!fatherName.trim()) {
       errors.push('पिता का नाम (Father\'s Name)');
     }
@@ -256,25 +271,17 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
       errors.push('जिला (District Name)');
     }
 
-    // 4. Documents Availability
+    // 5. Documents Availability
     if (!documentsAvailable) {
       errors.push('दस्तावेज़ उपलब्धता (YES या NO चुनें)');
     } else if (documentsAvailable === 'YES' && !documentType) {
       errors.push('उपलब्ध दस्तावेज़ का प्रकार (मार्कशीट / जन्म प्रमाण पत्र चुनें)');
     }
 
-    // 5. Aadhaar Provided & Verified
-    if (!isAadhaarProvided) {
-      errors.push('1. क्या आधार उपलब्ध कराया गया है? (YES या NO चुनें)');
-    }
-    if (!isAadhaarVerified) {
-      errors.push('2. क्या आधार सत्यापित है? (YES या NO चुनें)');
-    }
-
     // 6. Reason if not fully matched & verified
     if (!isAllMatchedAndYes) {
       if (!reason) {
-        errors.push('3. अपार आईडी नहीं बनने का कारण (Select Reason)');
+        errors.push('अपार आईडी नहीं बनने का कारण (Select Reason)');
       } else if ((reason === 'Other' || reason === 'अन्य (Other)') && !otherReason.trim()) {
         errors.push('अन्य कारण का विवरण लिखें (Specify Other Reason)');
       }
@@ -447,7 +454,106 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               </span>
             </div>
 
-            {/* 1. NAME VERIFICATION SECTION */}
+            {/* 1. AADHAAR AVAILABILITY & VERIFICATION (आधार उपलब्धता व सत्यापन) - SABSE PAHLE */}
+            <div className="bg-slate-50 p-3 sm:p-3.5 rounded-lg border border-slate-200 space-y-3">
+              {/* FIELD 1: Is AADHAAR Provided */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
+                    <span className="w-4 h-4 rounded-full bg-blue-700 text-white text-[10px] font-bold flex items-center justify-center">1</span>
+                    <span>Is AADHAAR Provided ? <span className="text-rose-500 font-bold">*</span></span>
+                    <span className="text-slate-500 font-normal text-[11px]">(आधार उपलब्ध कराया गया है?)</span>
+                  </label>
+                  {isAadhaarProvided && (
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                      isAadhaarProvided === 'YES' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                    }`}>
+                      {isAadhaarProvided}
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsAadhaarProvided('YES')}
+                    className={`py-2 sm:py-1.5 px-3 rounded-lg border text-xs font-semibold flex items-center justify-center space-x-1.5 transition-all cursor-pointer ${
+                      isAadhaarProvided === 'YES'
+                        ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs ring-2 ring-emerald-300'
+                        : 'bg-white text-slate-700 border-slate-300 hover:bg-emerald-50'
+                    }`}
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>YES (हाँ)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAadhaarProvided('NO');
+                      if (!nameMatchStatus) setNameMatchStatus('Mismatch');
+                      if (!dobMatchStatus) setDobMatchStatus('Mismatch');
+                    }}
+                    className={`py-2 sm:py-1.5 px-3 rounded-lg border text-xs font-semibold flex items-center justify-center space-x-1.5 transition-all cursor-pointer ${
+                      isAadhaarProvided === 'NO'
+                        ? 'bg-rose-600 text-white border-rose-700 shadow-2xs ring-2 ring-rose-300'
+                        : 'bg-white text-slate-700 border-slate-300 hover:bg-rose-50'
+                    }`}
+                  >
+                    <Ban className="w-3.5 h-3.5" />
+                    <span>NO (नहीं)</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* FIELD 2: Is AADHAAR Verified */}
+              <div className="space-y-1.5 pt-2.5 border-t border-slate-200">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
+                    <span className="w-4 h-4 rounded-full bg-blue-700 text-white text-[10px] font-bold flex items-center justify-center">2</span>
+                    <span>Is AADHAAR Verified ? <span className="text-rose-500 font-bold">*</span></span>
+                    <span className="text-slate-500 font-normal text-[11px]">(आधार सत्यापित है?)</span>
+                  </label>
+                  {isAadhaarVerified && (
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                      isAadhaarVerified === 'YES' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                    }`}>
+                      {isAadhaarVerified}
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsAadhaarVerified('YES')}
+                    className={`py-2 sm:py-1.5 px-3 rounded-lg border text-xs font-semibold flex items-center justify-center space-x-1.5 transition-all cursor-pointer ${
+                      isAadhaarVerified === 'YES'
+                        ? 'bg-blue-600 text-white border-blue-700 shadow-2xs ring-2 ring-blue-300'
+                        : 'bg-white text-slate-700 border-slate-300 hover:bg-blue-50'
+                    }`}
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>YES (सत्यापित है)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsAadhaarVerified('NO')}
+                    className={`py-2 sm:py-1.5 px-3 rounded-lg border text-xs font-semibold flex items-center justify-center space-x-1.5 transition-all cursor-pointer ${
+                      isAadhaarVerified === 'NO'
+                        ? 'bg-amber-600 text-white border-amber-700 shadow-2xs ring-2 ring-amber-300'
+                        : 'bg-white text-slate-700 border-slate-300 hover:bg-amber-50'
+                    }`}
+                  >
+                    <Ban className="w-3.5 h-3.5" />
+                    <span>NO (सत्यापित नहीं है)</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. NAME VERIFICATION SECTION */}
             <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-3">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
@@ -464,7 +570,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                 )}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className={`grid grid-cols-1 ${isAadhaarProvided === 'NO' ? '' : 'sm:grid-cols-2'} gap-3`}>
                 {/* Marksheet-wise Name */}
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-700 mb-1">
@@ -479,19 +585,21 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                   />
                 </div>
 
-                {/* Aadhaar-wise Name */}
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                    Aadhaar-wise Name <span className="text-rose-500 font-bold">*</span> <span className="text-slate-400 font-normal">(आधार अनुसार)</span>:
-                  </label>
-                  <input
-                    type="text"
-                    value={studentNameAadhaar}
-                    onChange={(e) => handleAadhaarNameChange(e.target.value)}
-                    placeholder="आधार कार्ड के अनुसार नाम..."
-                    className="w-full bg-white border border-slate-300 rounded-md py-1.5 px-2.5 text-xs text-slate-900 font-medium focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
+                {/* Aadhaar-wise Name (Hidden if Aadhaar not provided) */}
+                {isAadhaarProvided !== 'NO' && (
+                  <div className="animate-in fade-in duration-150">
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Aadhaar-wise Name <span className="text-rose-500 font-bold">*</span> <span className="text-slate-400 font-normal">(आधार अनुसार)</span>:
+                    </label>
+                    <input
+                      type="text"
+                      value={studentNameAadhaar}
+                      onChange={(e) => handleAadhaarNameChange(e.target.value)}
+                      placeholder="आधार कार्ड के अनुसार नाम..."
+                      className="w-full bg-white border border-slate-300 rounded-md py-1.5 px-2.5 text-xs text-slate-900 font-medium focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Name Match Status Buttons */}
@@ -529,7 +637,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               </div>
             </div>
 
-            {/* 2. DATE OF BIRTH (D.O.B.) SECTION */}
+            {/* 3. DATE OF BIRTH (D.O.B.) SECTION */}
             <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-3">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
@@ -546,7 +654,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                 )}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className={`grid grid-cols-1 ${isAadhaarProvided === 'NO' ? '' : 'sm:grid-cols-2'} gap-3`}>
                 {/* Marksheet-wise DOB */}
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-700 mb-1">
@@ -561,19 +669,21 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                   />
                 </div>
 
-                {/* Aadhaar-wise DOB */}
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                    Aadhaar-wise DOB <span className="text-rose-500 font-bold">*</span> <span className="text-slate-400 font-normal">(आधार अनुसार)</span>:
-                  </label>
-                  <input
-                    type="text"
-                    value={dobAadhaar}
-                    onChange={(e) => handleAadhaarDobChange(e.target.value)}
-                    placeholder="DD/MM/YYYY"
-                    className="w-full bg-white border border-slate-300 rounded-md py-1.5 px-2.5 text-xs text-slate-900 font-medium focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
+                {/* Aadhaar-wise DOB (Hidden if Aadhaar not provided) */}
+                {isAadhaarProvided !== 'NO' && (
+                  <div className="animate-in fade-in duration-150">
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Aadhaar-wise DOB <span className="text-rose-500 font-bold">*</span> <span className="text-slate-400 font-normal">(आधार अनुसार)</span>:
+                    </label>
+                    <input
+                      type="text"
+                      value={dobAadhaar}
+                      onChange={(e) => handleAadhaarDobChange(e.target.value)}
+                      placeholder="DD/MM/YYYY"
+                      className="w-full bg-white border border-slate-300 rounded-md py-1.5 px-2.5 text-xs text-slate-900 font-medium focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* DOB Match Status Buttons */}
@@ -611,7 +721,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               </div>
             </div>
 
-            {/* 3. FATHER'S NAME & DISTRICT NAME */}
+            {/* 4. FATHER'S NAME & DISTRICT NAME */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Father's Name */}
               <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
@@ -644,7 +754,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               </div>
             </div>
 
-            {/* 4. DOCUMENTS AVAILABILITY */}
+            {/* 5. DOCUMENTS AVAILABILITY */}
             <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
@@ -718,103 +828,10 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               )}
             </div>
 
-            {/* 5. AADHAAR STATUS & REASON */}
-            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-3">
-              {/* FIELD: Is AADHAAR Provided */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
-                    <span className="w-4 h-4 rounded-full bg-blue-700 text-white text-[10px] font-bold flex items-center justify-center">1</span>
-                    <span>Is AADHAAR Provided ? <span className="text-rose-500 font-bold">*</span></span>
-                    <span className="text-slate-500 font-normal text-[11px]">(आधार उपलब्ध कराया गया है?)</span>
-                  </label>
-                  {isAadhaarProvided && (
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                      isAadhaarProvided === 'YES' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                    }`}>
-                      {isAadhaarProvided}
-                    </span>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => setIsAadhaarProvided('YES')}
-                    className={`py-1.5 px-3 rounded-lg border text-xs font-semibold flex items-center justify-center space-x-1.5 transition-all cursor-pointer ${
-                      isAadhaarProvided === 'YES'
-                        ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs'
-                        : 'bg-white text-slate-700 border-slate-300 hover:bg-emerald-50'
-                    }`}
-                  >
-                    <Check className="w-3.5 h-3.5" />
-                    <span>YES (हाँ)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsAadhaarProvided('NO')}
-                    className={`py-1.5 px-3 rounded-lg border text-xs font-semibold flex items-center justify-center space-x-1.5 transition-all cursor-pointer ${
-                      isAadhaarProvided === 'NO'
-                        ? 'bg-rose-600 text-white border-rose-700 shadow-2xs'
-                        : 'bg-white text-slate-700 border-slate-300 hover:bg-rose-50'
-                    }`}
-                  >
-                    <Ban className="w-3.5 h-3.5" />
-                    <span>NO (नहीं)</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* FIELD: Is AADHAAR Verified */}
-              <div className="space-y-1.5 pt-2 border-t border-slate-200">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
-                    <span className="w-4 h-4 rounded-full bg-blue-700 text-white text-[10px] font-bold flex items-center justify-center">2</span>
-                    <span>Is AADHAAR Verified ? <span className="text-rose-500 font-bold">*</span></span>
-                    <span className="text-slate-500 font-normal text-[11px]">(आधार सत्यापित है?)</span>
-                  </label>
-                  {isAadhaarVerified && (
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                      isAadhaarVerified === 'YES' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                    }`}>
-                      {isAadhaarVerified}
-                    </span>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => setIsAadhaarVerified('YES')}
-                    className={`py-1.5 px-3 rounded-lg border text-xs font-semibold flex items-center justify-center space-x-1.5 transition-all cursor-pointer ${
-                      isAadhaarVerified === 'YES'
-                        ? 'bg-blue-600 text-white border-blue-700 shadow-2xs'
-                        : 'bg-white text-slate-700 border-slate-300 hover:bg-blue-50'
-                    }`}
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>YES (सत्यापित है)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsAadhaarVerified('NO')}
-                    className={`py-1.5 px-3 rounded-lg border text-xs font-semibold flex items-center justify-center space-x-1.5 transition-all cursor-pointer ${
-                      isAadhaarVerified === 'NO'
-                        ? 'bg-amber-600 text-white border-amber-700 shadow-2xs'
-                        : 'bg-white text-slate-700 border-slate-300 hover:bg-amber-50'
-                    }`}
-                  >
-                    <Ban className="w-3.5 h-3.5" />
-                    <span>NO (सत्यापित नहीं है)</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* FIELD: Reason For Not Generated Apaar Id (Hidden if all matched & verified) */}
+            {/* 6. REASON FOR NOT GENERATED APAAR ID (अपार आईडी नहीं बनने का कारण) */}
+            <div className="bg-slate-50 p-3 sm:p-3.5 rounded-lg border border-slate-200">
               {isAllMatchedAndYes ? (
-                <div className="pt-2 border-t border-slate-200 animate-in fade-in duration-150">
+                <div className="animate-in fade-in duration-150">
                   <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 flex items-start space-x-2.5 text-xs text-emerald-800">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                     <div>
@@ -826,9 +843,9 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                   </div>
                 </div>
               ) : (
-                <div className="space-y-1.5 pt-2 border-t border-slate-200 animate-in fade-in duration-150">
+                <div className="space-y-1.5 animate-in fade-in duration-150">
                   <label className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
-                    <span className="w-4 h-4 rounded-full bg-blue-700 text-white text-[10px] font-bold flex items-center justify-center">3</span>
+                    <AlertCircle className="w-4 h-4 text-amber-600" />
                     <span>Reason For Not Generated Apaar Id <span className="text-rose-500 font-bold">*</span></span>
                     <span className="text-slate-500 font-normal text-[11px]">(अपार आईडी नहीं बनने का कारण)</span>
                   </label>
@@ -862,19 +879,21 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               )}
             </div>
 
-            {/* Optional Remarks */}
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                रिमार्क्स / टिप्पणी (Optional Remarks):
-              </label>
-              <input
-                type="text"
-                value={remarks}
-                onChange={(e) => setRemarks(e.target.value)}
-                placeholder="फील्ड सत्यापन संबंधी कोई अन्य टिप्पणी..."
-                className="w-full bg-white border border-slate-300 rounded-md p-2 text-xs text-slate-900"
-              />
-            </div>
+            {/* Remarks (Shown only when UDISE portal entry reasons are selected) */}
+            {shouldShowRemarks && (
+              <div className="bg-slate-50 p-3 sm:p-3.5 rounded-lg border border-slate-200 animate-in fade-in duration-150 space-y-1.5">
+                <label className="block text-[11px] font-bold text-slate-700">
+                  रिमार्क्स / टिप्पणी (Remarks):
+                </label>
+                <input
+                  type="text"
+                  value={remarks}
+                  onChange={(e) => setRemarks(e.target.value)}
+                  placeholder="यू-डाइस (UDISE) या फील्ड सत्यापन संबंधी टिप्पणी लिखें..."
+                  className="w-full bg-white border border-slate-300 rounded-md p-2 text-xs text-slate-900 focus:ring-2 focus:ring-blue-500 font-medium"
+                />
+              </div>
+            )}
 
             {/* Surveyor details */}
             <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-100">
