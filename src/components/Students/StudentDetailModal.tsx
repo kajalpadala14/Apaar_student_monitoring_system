@@ -487,11 +487,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
 
                   <button
                     type="button"
-                    onClick={() => {
-                      setIsAadhaarProvided('NO');
-                      if (!nameMatchStatus) setNameMatchStatus('Mismatch');
-                      if (!dobMatchStatus) setDobMatchStatus('Mismatch');
-                    }}
+                    onClick={() => setIsAadhaarProvided('NO')}
                     className={`py-2 sm:py-1.5 px-3 rounded-lg border text-xs font-semibold flex items-center justify-center space-x-1.5 transition-all cursor-pointer ${
                       isAadhaarProvided === 'NO'
                         ? 'bg-rose-600 text-white border-rose-700 shadow-2xs ring-2 ring-rose-300'
