@@ -43,6 +43,11 @@ export const DashboardView: React.FC = () => {
     setActiveFilters((prev) => ({ ...prev, className }));
   };
 
+  const handleFilterReason = (reasonName: string) => {
+    setActiveFilters((prev) => ({ ...prev, reason: reasonName }));
+    setActiveTab('students');
+  };
+
   const reasonsList = Object.entries(reasonCounts).sort((a, b) => b[1] - a[1]);
   const maxReasonCount = reasonsList.length > 0 ? Math.max(...reasonsList.map(([_, count]) => count)) : 1;
 
@@ -491,23 +496,31 @@ export const DashboardView: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <div className="space-y-3">
-                {reasonsList.slice(0, 7).map(([reason, count]) => {
+              <div className="space-y-2">
+                {reasonsList.slice(0, 10).map(([reason, count]) => {
                   const pct = stats.surveyCompleted > 0 ? ((count / stats.surveyCompleted) * 100).toFixed(1) : '0';
                   const barWidth = Math.max(8, Math.round((count / maxReasonCount) * 100));
                   return (
-                    <div key={reason} className="space-y-1">
-                      <div className="flex justify-between text-xs">
-                        <span className="font-medium text-slate-700 truncate pr-2" title={reason}>
+                    <div
+                      key={reason}
+                      onClick={() => handleFilterReason(reason)}
+                      className="p-1.5 -mx-1.5 rounded-lg hover:bg-amber-50/80 transition-all cursor-pointer group space-y-1"
+                      title={`Click to view ${count} students: "${reason}"`}
+                    >
+                      <div className="flex justify-between text-xs items-center">
+                        <span className="font-medium text-slate-700 group-hover:text-amber-900 group-hover:underline truncate pr-2" title={reason}>
                           {reason}
                         </span>
-                        <span className="font-semibold text-slate-900 whitespace-nowrap tabular-nums">
-                          {count} ({pct}%)
-                        </span>
+                        <div className="flex items-center space-x-1 shrink-0">
+                          <span className="font-semibold text-slate-900 whitespace-nowrap tabular-nums">
+                            {count} ({pct}%)
+                          </span>
+                          <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-amber-800 transition-transform group-hover:translate-x-0.5" />
+                        </div>
                       </div>
-                      <div className="w-full bg-slate-100 rounded-full h-1.5">
+                      <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
                         <div
-                          className="bg-amber-600 h-1.5 rounded-full transition-all duration-300"
+                          className="bg-amber-600 h-1.5 rounded-full transition-all duration-300 group-hover:bg-amber-700"
                           style={{ width: `${barWidth}%` }}
                         ></div>
                       </div>
@@ -519,8 +532,14 @@ export const DashboardView: React.FC = () => {
           </div>
 
           <div className="p-3 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between text-xs text-slate-500">
-            <span>Pending Surveys: {stats.surveyPending}</span>
-            <span className="text-[11px] text-slate-400">Based on verified entries</span>
+            <span>क्लिक करके छात्रों का विवरण देखें</span>
+            <button
+              onClick={() => setActiveTab('reports')}
+              className="text-xs font-semibold text-blue-700 hover:text-blue-900 cursor-pointer inline-flex items-center space-x-0.5"
+            >
+              <span>रिपोर्ट्स</span>
+              <span>&rarr;</span>
+            </button>
           </div>
         </div>
 

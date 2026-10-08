@@ -11,6 +11,7 @@ import {
 
 export interface ReportPreviewData {
   title: string;
+  subtitle?: string;
   format: 'excel' | 'pdf';
   filename: string;
   headers: string[];

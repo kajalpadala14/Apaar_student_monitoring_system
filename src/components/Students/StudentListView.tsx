@@ -65,6 +65,17 @@ export const StudentListView: React.FC = () => {
     return Array.from(set).sort();
   }, [students]);
 
+  const availableReasons = useMemo(() => {
+    const set = new Set<string>();
+    SURVEY_REASONS.forEach((r) => set.add(r));
+    students.forEach((s) => {
+      if (s.apaar_pending_reason && s.apaar_pending_reason.trim()) {
+        set.add(s.apaar_pending_reason.trim());
+      }
+    });
+    return Array.from(set);
+  }, [students]);
+
   // Handle Sort
   const sortedStudents = useMemo(() => {
     return [...filteredStudents].sort((a, b) => {
@@ -186,6 +197,26 @@ export const StudentListView: React.FC = () => {
           </span>
         </button>
       </div>
+
+      {/* Active Reason Notice Banner */}
+      {activeFilters.reason && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-900 px-3 py-2 rounded-lg flex items-center justify-between text-xs shadow-2xs">
+          <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+            <span className="font-bold">फ़िल्टर कारण (Reason Filter):</span>
+            <span className="font-semibold bg-white px-2 py-0.5 rounded border border-amber-300 text-slate-900">{activeFilters.reason}</span>
+            <span className="text-[11px] text-amber-800 font-semibold">({filteredStudents.length.toLocaleString('en-IN')} छात्र)</span>
+          </div>
+          <button
+            onClick={() => {
+              setActiveFilters((prev) => ({ ...prev, reason: '' }));
+              setCurrentPage(1);
+            }}
+            className="text-amber-800 hover:text-amber-950 font-bold underline text-xs cursor-pointer ml-3 shrink-0"
+          >
+            फ़िल्टर हटाएं (Clear) ✕
+          </button>
+        </div>
+      )}
 
       {/* Filter Row */}
       <div className="bg-white border border-slate-200 rounded-lg p-2.5 sm:p-3 shadow-2xs">
@@ -373,7 +404,7 @@ export const StudentListView: React.FC = () => {
               className="w-full bg-slate-50 border border-slate-300 rounded-md py-1.5 px-2 text-slate-800 focus:bg-white text-[11px]"
             >
               <option value="">Reason (सभी कारण)</option>
-              {SURVEY_REASONS.map((r) => (
+              {availableReasons.map((r) => (
                 <option key={r} value={r}>{r}</option>
               ))}
             </select>

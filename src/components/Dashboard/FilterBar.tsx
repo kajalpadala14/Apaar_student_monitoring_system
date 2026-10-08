@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useStudents } from '../../context/StudentContext';
 import { Filter, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
-import { SURVEY_STATUS_OPTIONS } from '../../types/student';
+import { SURVEY_REASONS, SURVEY_STATUS_OPTIONS } from '../../types/student';
 
 export const FilterBar: React.FC = () => {
   const { students, activeFilters, setActiveFilters, resetFilters, currentUser } = useStudents();
@@ -53,12 +53,22 @@ export const FilterBar: React.FC = () => {
     return Array.from(set).sort();
   }, [students]);
 
+  const reasons = useMemo(() => {
+    const set = new Set<string>();
+    SURVEY_REASONS.forEach((r) => set.add(r));
+    students.forEach((s) => {
+      if (s.apaar_pending_reason?.trim()) set.add(s.apaar_pending_reason.trim());
+    });
+    return Array.from(set);
+  }, [students]);
+
   const activeFilterCount = [
     !isSchoolUser && activeFilters.block,
     !isSchoolUser && activeFilters.sankul,
     !isSchoolUser && activeFilters.school,
     activeFilters.className,
     activeFilters.surveyStatus,
+    activeFilters.reason,
   ].filter(Boolean).length;
 
   const isFiltered = activeFilterCount > 0;
@@ -70,7 +80,7 @@ export const FilterBar: React.FC = () => {
           <Filter className="w-3.5 h-3.5 text-blue-700 shrink-0" />
           <span>{isSchoolUser ? 'School Filters' : 'Dashboard Filters'}</span>
           <span className="text-[11px] text-slate-400 font-normal hidden xs:inline">
-            ({isSchoolUser ? 'कक्षा व स्थिति फ़िल्टर' : 'ब्लॉक, संकुल, स्कूल व कक्षा'})
+            ({isSchoolUser ? 'कक्षा, स्थिति व कारण फ़िल्टर' : 'ब्लॉक, संकुल, स्कूल, कक्षा, स्थिति व कारण'})
           </span>
           {isFiltered && (
             <span className="bg-blue-50 text-blue-700 border border-blue-200 text-[10px] px-2 py-0.2 rounded-full font-semibold">
@@ -103,7 +113,7 @@ export const FilterBar: React.FC = () => {
         </div>
       </div>
 
-      <div className={`${isMobileOpen ? 'grid' : 'hidden sm:grid'} grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3 pt-3`}>
+      <div className={`${isMobileOpen ? 'grid' : 'hidden sm:grid'} grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3 pt-3`}>
         {/* Block Filter */}
         <div>
           <label className="block text-[11px] font-medium text-slate-600 mb-1">
@@ -218,6 +228,23 @@ export const FilterBar: React.FC = () => {
             <option value="">All Statuses</option>
             {SURVEY_STATUS_OPTIONS.map((st) => (
               <option key={st} value={st}>{st}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Reason Filter */}
+        <div>
+          <label className="block text-[11px] font-medium text-slate-600 mb-1">
+            Reason (कारण)
+          </label>
+          <select
+            value={activeFilters.reason}
+            onChange={(e) => setActiveFilters((prev) => ({ ...prev, reason: e.target.value }))}
+            className="w-full h-9 text-xs bg-slate-50 border border-slate-200 text-slate-800 hover:border-slate-300 focus:bg-white focus:border-blue-600 focus:ring-1 focus:ring-blue-600 focus:outline-hidden rounded-lg px-2.5 transition-colors truncate"
+          >
+            <option value="">All Reasons ({reasons.length})</option>
+            {reasons.map((r) => (
+              <option key={r} value={r}>{r}</option>
             ))}
           </select>
         </div>

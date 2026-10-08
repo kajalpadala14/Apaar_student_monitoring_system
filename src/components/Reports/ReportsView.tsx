@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useStudents } from '../../context/StudentContext';
 import { Student } from '../../types/student';
-import { exportToExcel, exportStudentDetailedReport } from '../../lib/excel';
+import { exportToExcel, exportStudentDetailedReport, exportReasonWiseMultiSheetReport } from '../../lib/excel';
 import { generatePDFReport } from '../../lib/pdf';
 import {
   FileSpreadsheet,
@@ -12,18 +12,35 @@ import {
   Building,
   CheckCircle,
   AlertTriangle,
-  RotateCcw
+  RotateCcw,
+  Eye,
+  ArrowUpRight,
+  Layers,
+  ListFilter
 } from 'lucide-react';
 import { SURVEY_REASONS, SURVEY_STATUS_OPTIONS } from '../../types/student';
 import { ReportPreviewModal, ReportPreviewData } from './ReportPreviewModal';
 
 export const ReportsView: React.FC = () => {
-  const { students, filteredStudents, activeFilters, setActiveFilters, resetFilters, currentUser } = useStudents();
+  const { students, filteredStudents, activeFilters, setActiveFilters, resetFilters, currentUser, setActiveTab } = useStudents();
   const isSchoolUser = currentUser?.role === 'SCHOOL_USER';
   const [selectedReportView, setSelectedReportView] = useState<'block' | 'school' | 'reason' | 'detailed'>(
     currentUser?.role === 'SCHOOL_USER' ? 'school' : 'block'
   );
   const [previewData, setPreviewData] = useState<ReportPreviewData | null>(null);
+  const [selectedDetailedReason, setSelectedDetailedReason] = useState<string>('');
+
+  // Dynamic filter options
+  const availableReasons = useMemo(() => {
+    const set = new Set<string>();
+    SURVEY_REASONS.forEach((r) => set.add(r));
+    students.forEach((s) => {
+      if (s.apaar_pending_reason && s.apaar_pending_reason.trim()) {
+        set.add(s.apaar_pending_reason.trim());
+      }
+    });
+    return Array.from(set);
+  }, [students]);
 
   // Dynamic filter options
   const blocks = useMemo(() => {
@@ -184,6 +201,93 @@ export const ReportsView: React.FC = () => {
     s.survey_status || '',
     s.surveyor_name || '-'
   ];
+
+  // Helper to fetch students for a particular reason
+  const getReasonStudents = (reasonName: string) => {
+    return filteredStudents.filter((s) => s.apaar_pending_reason?.trim() === reasonName.trim());
+  };
+
+  // Preview & Export Single Reason Student Details (Excel)
+  const handlePreviewReasonDetailsExcel = (reasonName: string) => {
+    const targetStudents = reasonName ? getReasonStudents(reasonName) : filteredStudents.filter(s => !!s.apaar_pending_reason);
+    const rows = targetStudents.map(studentToPreviewRow);
+    const safeTitle = reasonName ? `कारण-वार विस्तृत छात्र रिपोर्ट: ${reasonName}` : 'All Reasons Detailed Students Report';
+    const safeFilename = reasonName
+      ? `APAAR_Reason_${reasonName.replace(/[:\\/?*\[\]\s]/g, '_').slice(0, 25)}_Students`
+      : 'APAAR_All_Reasons_Detailed_Students';
+
+    setPreviewData({
+      title: `${safeTitle} (${targetStudents.length.toLocaleString('en-IN')} छात्र)`,
+      format: 'excel',
+      filename: safeFilename,
+      sheetName: 'Reason_Students',
+      headers: detailedPreviewHeaders,
+      rows,
+      totalRecords: targetStudents.length,
+      onDownload: () => exportStudentDetailedReport(targetStudents, safeFilename)
+    });
+  };
+
+  // Preview & Export Single Reason Student Details (PDF)
+  const handlePreviewReasonDetailsPDF = (reasonName: string) => {
+    const targetStudents = reasonName ? getReasonStudents(reasonName) : filteredStudents.filter(s => !!s.apaar_pending_reason);
+    const pdfHeaders = ['क्र.', 'ब्लॉक', 'संकुल', 'स्कूल', 'कक्षा', 'PEN', 'विद्यार्थी नाम', 'कारण', 'स्थिति'];
+    const pdfRows = targetStudents.slice(0, 100).map((s, idx) => [
+      idx + 1,
+      s.block_name || '-',
+      s.sankul_name || '-',
+      s.school_name || '-',
+      s.class_name || '-',
+      s.student_pen_number || '-',
+      s.student_name_marksheet || '-',
+      s.apaar_pending_reason || '-',
+      s.survey_status || '-'
+    ]);
+    const safeTitle = reasonName ? `कारण: ${reasonName}` : 'ALL REASONS DETAILED SNAPSHOT';
+    const safeFilename = reasonName
+      ? `APAAR_Reason_${reasonName.replace(/[:\\/?*\[\]\s]/g, '_').slice(0, 25)}_PDF`
+      : 'APAAR_All_Reasons_Students_PDF';
+
+    setPreviewData({
+      title: `${safeTitle} (${targetStudents.length.toLocaleString('en-IN')} छात्र)`,
+      subtitle: `Dantewada APAAR Student Pending Reason Report`,
+      format: 'pdf',
+      filename: safeFilename,
+      headers: pdfHeaders,
+      rows: pdfRows,
+      totalRecords: targetStudents.length,
+      onDownload: () => generatePDFReport({
+        title: safeTitle,
+        subtitle: `Dantewada APAAR Student Pending Reason Report (${targetStudents.length} छात्र)`,
+        filename: safeFilename,
+        headers: pdfHeaders,
+        rows: pdfRows
+      })
+    });
+  };
+
+  // Export All Reasons Multi-Sheet Excel
+  const handleExportAllReasonsMultiSheet = () => {
+    const reasonGroups = reasonReportData.map((r) => ({
+      reason: r.reason,
+      students: filteredStudents.filter((s) => s.apaar_pending_reason?.trim() === r.reason.trim())
+    }));
+    const summaryRows = reasonReportData.map((r) => ({
+      'Reason (अपार न बनने का कारण)': r.reason,
+      'Student Count (छात्र संख्या)': r.count,
+      'Percentage (प्रतिशत)': `${r.percentage}%`,
+      'Survey Completed (पूर्ण)': r.completed,
+      'Follow-up Required (फॉलो-अप)': r.followUp,
+      'Resolved (निराकृत)': r.resolved
+    }));
+    exportReasonWiseMultiSheetReport(reasonGroups, summaryRows, 'Dantewada_Reason_Wise_All_Students');
+  };
+
+  // Navigate to Students list filtered by reason
+  const handleNavigateToReasonStudents = (reasonName: string) => {
+    setActiveFilters((prev) => ({ ...prev, reason: reasonName }));
+    setActiveTab('students');
+  };
 
   // 1. Block Wise
   const handlePreviewBlockExcel = () => {
@@ -546,7 +650,7 @@ export const ReportsView: React.FC = () => {
             <Filter className="w-3.5 h-3.5 text-blue-700" />
             <span>Filter Report Scope (रिपोर्ट फ़िल्टर)</span>
           </span>
-          {(activeFilters.block || activeFilters.sankul || activeFilters.school || activeFilters.surveyStatus) && (
+          {(activeFilters.block || activeFilters.sankul || activeFilters.school || activeFilters.surveyStatus || activeFilters.reason) && (
             <button
               onClick={resetFilters}
               className="text-xs text-rose-600 hover:text-rose-800 font-medium flex items-center space-x-1 cursor-pointer"
@@ -557,7 +661,7 @@ export const ReportsView: React.FC = () => {
           )}
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 text-xs">
           <div>
             <label className="text-[10px] text-slate-500 block mb-0.5">Block</label>
             <select
@@ -630,6 +734,20 @@ export const ReportsView: React.FC = () => {
             >
               <option value="">All Statuses</option>
               {SURVEY_STATUS_OPTIONS.map((st) => <option key={st} value={st}>{st}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-[10px] text-slate-500 block mb-0.5">Reason (कारण)</label>
+            <select
+              value={activeFilters.reason}
+              onChange={(e) => setActiveFilters((prev) => ({ ...prev, reason: e.target.value }))}
+              className="w-full bg-slate-50 border border-slate-300 rounded p-1.5 text-slate-800 text-xs truncate"
+            >
+              <option value="">All Reasons (सभी कारण)</option>
+              {availableReasons.map((r) => (
+                <option key={r} value={r}>{r}</option>
+              ))}
             </select>
           </div>
         </div>
@@ -715,14 +833,85 @@ export const ReportsView: React.FC = () => {
               className="flex-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-semibold py-1.5 px-2 rounded flex items-center justify-center space-x-1 cursor-pointer"
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
-              <span>Excel</span>
+              <span>Excel (Summary)</span>
             </button>
             <button
               onClick={handlePreviewReasonPDF}
               className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-300 text-xs font-semibold py-1.5 px-2 rounded flex items-center justify-center space-x-1 cursor-pointer"
             >
               <FileText className="w-3.5 h-3.5" />
-              <span>PDF</span>
+              <span>PDF (Summary)</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Card 3B: Reason-Wise Student Detailed Report */}
+        <div className="bg-white border-2 border-amber-300/80 rounded-lg p-4 shadow-2xs flex flex-col justify-between relative overflow-hidden bg-linear-to-b from-amber-50/40 to-white">
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-amber-900 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded uppercase">
+                Reason Student Details (विस्तृत)
+              </span>
+              <span className="text-[11px] font-bold text-amber-900 tabular-nums">
+                {selectedDetailedReason
+                  ? `${getReasonStudents(selectedDetailedReason).length} छात्र`
+                  : `${filteredStudents.filter((s) => !!s.apaar_pending_reason).length} छात्र`}
+              </span>
+            </div>
+            <h3 className="text-sm font-bold text-slate-900 mt-2">
+              Reason-wise Detailed Report
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">
+              किसी भी विशिष्ट कारण के सभी छात्रों की विस्तृत सूची (PEN, नाम, स्कूल, कक्षा, आदि) डाउनलोड करें।
+            </p>
+
+            {/* Select Reason */}
+            <div className="mt-2.5">
+              <label className="text-[10px] font-semibold text-slate-600 block mb-1">
+                विशिष्ट कारण चुनें (Select Reason):
+              </label>
+              <select
+                value={selectedDetailedReason}
+                onChange={(e) => setSelectedDetailedReason(e.target.value)}
+                className="w-full bg-white border border-amber-300 rounded p-1.5 text-xs text-slate-800 truncate focus:outline-hidden focus:ring-1 focus:ring-amber-500 font-medium"
+              >
+                <option value="">-- सभी कारण (All Reasons) --</option>
+                {reasonReportData.map((r) => (
+                  <option key={r.reason} value={r.reason}>
+                    {r.reason} ({r.count} छात्र)
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="mt-3 pt-3 border-t border-amber-100 space-y-2">
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => handlePreviewReasonDetailsExcel(selectedDetailedReason)}
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold py-1.5 px-2 rounded flex items-center justify-center space-x-1 cursor-pointer shadow-2xs transition-colors"
+                title="चयनित कारण के छात्रों की विस्तृत एक्सेल रिपोर्ट डाउनलोड/प्रिव्यू करें"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>Excel विवरण</span>
+              </button>
+              <button
+                onClick={() => handlePreviewReasonDetailsPDF(selectedDetailedReason)}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-1.5 px-2 rounded flex items-center justify-center space-x-1 cursor-pointer shadow-2xs transition-colors"
+                title="चयनित कारण के छात्रों की पीडीएफ रिपोर्ट डाउनलोड/प्रिव्यू करें"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>PDF विवरण</span>
+              </button>
+            </div>
+
+            <button
+              onClick={handleExportAllReasonsMultiSheet}
+              className="w-full bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-[11px] font-semibold py-1 px-2 rounded flex items-center justify-center space-x-1.5 cursor-pointer transition-colors"
+              title="डाउनलोड करें सिंगल एक्सेल जिसमें प्रत्येक कारण की अलग शीट हो"
+            >
+              <Layers className="w-3.5 h-3.5 text-amber-700" />
+              <span>ऑल-रीजन मल्टी-शीट Excel</span>
             </button>
           </div>
         </div>
@@ -963,31 +1152,109 @@ export const ReportsView: React.FC = () => {
                 No survey reason data recorded yet.
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-700 font-semibold">
-                      <th className="py-2.5 px-3">Pending Reason (कारण)</th>
-                      <th className="py-2.5 px-3 text-right">Student Count</th>
-                      <th className="py-2.5 px-3 text-right">Percentage %</th>
-                      <th className="py-2.5 px-3 text-right">Completed</th>
-                      <th className="py-2.5 px-3 text-right">Follow-up</th>
-                      <th className="py-2.5 px-3 text-right">Resolved</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {reasonReportData.map((r) => (
-                      <tr key={r.reason} className="hover:bg-slate-50">
-                        <td className="py-2.5 px-3 font-semibold text-slate-900">{r.reason}</td>
-                        <td className="py-2.5 px-3 text-right font-bold text-amber-700">{r.count}</td>
-                        <td className="py-2.5 px-3 text-right text-slate-700">{r.percentage}%</td>
-                        <td className="py-2.5 px-3 text-right text-emerald-700">{r.completed}</td>
-                        <td className="py-2.5 px-3 text-right text-amber-700">{r.followUp}</td>
-                        <td className="py-2.5 px-3 text-right text-blue-700">{r.resolved}</td>
+              <div className="space-y-3">
+                {/* Header Action Bar */}
+                <div className="bg-amber-50/70 border border-amber-200/80 rounded-lg p-2.5 sm:p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                  <div className="text-xs text-amber-950 flex items-center space-x-2">
+                    <span className="font-bold bg-amber-200/70 text-amber-900 px-2 py-0.5 rounded text-[10px] uppercase">
+                      कारण-वार विस्तृत रिपोर्ट
+                    </span>
+                    <span className="hidden sm:inline text-slate-600">
+                      प्रत्येक कारण के छात्र विवरण देखने या Excel / PDF डाउनलोड करने हेतु पंक्ति में दिए गए विकल्पों का उपयोग करें।
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={handleExportAllReasonsMultiSheet}
+                    className="inline-flex items-center justify-center space-x-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold px-3 py-1.5 rounded-md shadow-2xs transition-colors cursor-pointer self-start sm:self-auto shrink-0"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                    <span>सभी कारणों का मल्टी-शीट Excel डाउनलोड करें</span>
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse min-w-[750px]">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-700 font-semibold">
+                        <th className="py-2.5 px-3">Pending Reason (कारण)</th>
+                        <th className="py-2.5 px-3 text-right">Student Count</th>
+                        <th className="py-2.5 px-3 text-right">Percentage %</th>
+                        <th className="py-2.5 px-3 text-right">Completed</th>
+                        <th className="py-2.5 px-3 text-right">Follow-up</th>
+                        <th className="py-2.5 px-3 text-right">Resolved</th>
+                        <th className="py-2.5 px-3 text-right min-w-[230px]">Student Details & Reports (विस्तृत छात्र रिपोर्ट)</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {reasonReportData.map((r) => (
+                        <tr key={r.reason} className="hover:bg-slate-50/80 transition-colors">
+                          <td
+                            className="py-2.5 px-3 font-semibold text-slate-900 hover:text-blue-700 cursor-pointer"
+                            onClick={() => handlePreviewReasonDetailsExcel(r.reason)}
+                            title={`क्लिक करके "${r.reason}" के सभी ${r.count} छात्रों का विवरण देखें`}
+                          >
+                            <span>{r.reason}</span>
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-bold text-amber-700 tabular-nums">{r.count}</td>
+                          <td className="py-2.5 px-3 text-right text-slate-700 tabular-nums">{r.percentage}%</td>
+                          <td className="py-2.5 px-3 text-right text-emerald-700 tabular-nums">{r.completed}</td>
+                          <td className="py-2.5 px-3 text-right text-amber-700 tabular-nums">{r.followUp}</td>
+                          <td className="py-2.5 px-3 text-right text-blue-700 tabular-nums">{r.resolved}</td>
+                          <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end space-x-1.5">
+                              {/* 1. Preview Student Details */}
+                              <button
+                                onClick={() => handlePreviewReasonDetailsExcel(r.reason)}
+                                className="inline-flex items-center space-x-1 bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 rounded text-[11px] font-medium transition-colors cursor-pointer"
+                                title={`इस कारण के ${r.count} छात्रों का विवरण प्रिव्यू करें`}
+                              >
+                                <Eye className="w-3 h-3 text-slate-500" />
+                                <span>विवरण</span>
+                              </button>
+
+                              {/* 2. Download Excel */}
+                              <button
+                                onClick={() => {
+                                  const reasonStudents = getReasonStudents(r.reason);
+                                  exportStudentDetailedReport(
+                                    reasonStudents,
+                                    `APAAR_${r.reason.replace(/[:\\/?*\[\]\s]/g, '_').slice(0, 25)}_Students`
+                                  );
+                                }}
+                                className="inline-flex items-center space-x-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-1 rounded text-[11px] font-semibold transition-colors cursor-pointer"
+                                title={`इस कारण के ${r.count} छात्रों की एक्सेल फाइल डाउनलोड करें`}
+                              >
+                                <FileSpreadsheet className="w-3.5 h-3.5" />
+                                <span>Excel</span>
+                              </button>
+
+                              {/* 3. Download PDF */}
+                              <button
+                                onClick={() => handlePreviewReasonDetailsPDF(r.reason)}
+                                className="inline-flex items-center space-x-1 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-300 px-2 py-1 rounded text-[11px] font-semibold transition-colors cursor-pointer"
+                                title={`इस कारण के ${r.count} छात्रों की पीडीएफ फाइल डाउनलोड करें`}
+                              >
+                                <FileText className="w-3.5 h-3.5" />
+                                <span>PDF</span>
+                              </button>
+
+                              {/* 4. Navigate to Students list */}
+                              <button
+                                onClick={() => handleNavigateToReasonStudents(r.reason)}
+                                className="inline-flex items-center space-x-0.5 text-blue-700 hover:text-blue-900 font-semibold px-1.5 py-1 text-[11px] cursor-pointer hover:bg-blue-50 rounded"
+                                title={`छात्र सूची में देखें और संपादन करें`}
+                              >
+                                <span>छात्र</span>
+                                <ArrowUpRight className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </div>
