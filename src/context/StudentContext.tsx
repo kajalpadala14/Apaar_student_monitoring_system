@@ -49,6 +49,9 @@ interface StudentContextType {
     followUpRequired: number;
     resolved: number;
     completionRate: number;
+    apaarGeneratedCount?: number;
+    apaarPendingCount?: number;
+    apaarGeneratedRate?: number;
   };
   blockSummaries: BlockSummary[];
   reasonCounts: Record<string, number>;
@@ -383,15 +386,25 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     let pending = 0;
     let followUp = 0;
     let resolved = 0;
+    let apaarGenerated = 0;
 
     targetSet.forEach((s) => {
       if (s.survey_status === 'SURVEY COMPLETED') completed++;
       else if (s.survey_status === 'PENDING') pending++;
       else if (s.survey_status === 'FOLLOW-UP REQUIRED') followUp++;
       else if (s.survey_status === 'RESOLVED') resolved++;
+
+      if (
+        s.is_apaar_generated === 'YES' ||
+        s.apaar_pending_reason === 'APAAR ID बन गई है' ||
+        (s.survey_status === 'SURVEY COMPLETED' && !s.apaar_pending_reason)
+      ) {
+        apaarGenerated++;
+      }
     });
 
     const completionRate = total > 0 ? parseFloat((((completed + resolved) / total) * 100).toFixed(1)) : 0;
+    const apaarGeneratedRate = total > 0 ? parseFloat(((apaarGenerated / total) * 100).toFixed(1)) : 0;
 
     return {
       totalStudents: total,
@@ -400,16 +413,19 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       followUpRequired: followUp,
       resolved: resolved,
       completionRate,
+      apaarGeneratedCount: apaarGenerated,
+      apaarPendingCount: total - apaarGenerated,
+      apaarGeneratedRate,
     };
   }, [filteredStudents]);
 
   // Block-wise summary rows
   const blockSummaries = useMemo(() => {
     const blocks = ['DANTEWADA', 'GEEDAM', 'KUAKONDA', 'KATEKALYAN'];
-    const map = new Map<string, { total: number; completed: number; pending: number; followUp: number; resolved: number }>();
+    const map = new Map<string, { total: number; completed: number; pending: number; followUp: number; resolved: number; apaarGenerated: number }>();
 
     blocks.forEach((b) => {
-      map.set(b, { total: 0, completed: 0, pending: 0, followUp: 0, resolved: 0 });
+      map.set(b, { total: 0, completed: 0, pending: 0, followUp: 0, resolved: 0, apaarGenerated: 0 });
     });
 
     // In school user mode, only their school's students are counted
@@ -417,7 +433,7 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const b = (s.block_name || '').toUpperCase().trim();
       let entry = map.get(b);
       if (!entry) {
-        entry = { total: 0, completed: 0, pending: 0, followUp: 0, resolved: 0 };
+        entry = { total: 0, completed: 0, pending: 0, followUp: 0, resolved: 0, apaarGenerated: 0 };
         map.set(b, entry);
       }
       entry.total++;
@@ -425,6 +441,14 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       else if (s.survey_status === 'PENDING') entry.pending++;
       else if (s.survey_status === 'FOLLOW-UP REQUIRED') entry.followUp++;
       else if (s.survey_status === 'RESOLVED') entry.resolved++;
+
+      if (
+        s.is_apaar_generated === 'YES' ||
+        s.apaar_pending_reason === 'APAAR ID बन गई है' ||
+        (s.survey_status === 'SURVEY COMPLETED' && !s.apaar_pending_reason)
+      ) {
+        entry.apaarGenerated++;
+      }
     });
 
     return Array.from(map.entries()).map(([block, counts]) => ({
@@ -434,6 +458,8 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       surveyPending: counts.pending,
       followUpRequired: counts.followUp,
       resolved: counts.resolved,
+      apaarGenerated: counts.apaarGenerated,
+      apaarRate: counts.total > 0 ? parseFloat(((counts.apaarGenerated / counts.total) * 100).toFixed(1)) : 0,
       completionRate: counts.total > 0 ? parseFloat((((counts.completed + counts.resolved) / counts.total) * 100).toFixed(1)) : 0,
     }));
   }, [students]);
@@ -508,6 +534,7 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
               districtName: updatedStudent.district_name || updatedStudent.student_district,
               documentsAvailable: updatedStudent.documents_available,
               remarks: updatedStudent.remarks,
+              isApaarGenerated: updatedStudent.is_apaar_generated,
             }
           ).catch((err) => console.warn('Google Sheet background sync warning:', err));
         }

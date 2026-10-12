@@ -38,6 +38,9 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
 }) => {
   const { updateStudentSurvey, currentUser } = useStudents();
 
+  // 0. क्या विद्यार्थी की APAAR ID बन गई है? (Gatekeeper Question: 'YES' | 'NO' | null)
+  const [isApaarGenerated, setIsApaarGenerated] = useState<'YES' | 'NO' | null>(null);
+
   // 1. Name Section
   const [studentNameMarksheet, setStudentNameMarksheet] = useState<string>('');
   const [studentNameAadhaar, setStudentNameAadhaar] = useState<string>('');
@@ -70,6 +73,18 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
 
   // Sync state whenever student prop changes
   useEffect(() => {
+    // 0. APAAR Generated status gatekeeper
+    if (student.is_apaar_generated === 'YES') {
+      setIsApaarGenerated('YES');
+    } else if (student.is_apaar_generated === 'NO') {
+      setIsApaarGenerated('NO');
+    } else if (student.apaar_pending_reason && student.apaar_pending_reason.trim() !== '') {
+      setIsApaarGenerated('NO');
+    } else if (student.survey_status === 'SURVEY COMPLETED' && !student.apaar_pending_reason) {
+      setIsApaarGenerated('YES');
+    } else {
+      setIsApaarGenerated(null);
+    }
     // Name
     const initialMarksheetName = student.student_name_marksheet || '';
     const initialAadhaarName = student.student_name_aadhaar || '';
@@ -205,7 +220,42 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
      reason === 'आधार कार्ड उपलब्ध हैं परन्तु UDISE पोर्टल में एंट्री नहीं हुआ हैं' ||
      (reason.includes('आधार कार्ड उपलब्ध हैं') && reason.includes('UDISE पोर्टल')));
 
+  // Direct Submit when user answers 'हाँ' (YES) to "क्या विद्यार्थी की APAAR ID बन गई है?"
+  const handleDirectSubmitApaarYes = async () => {
+    setIsSaving(true);
+    setIsApaarGenerated('YES');
+    setValidationErrors([]);
+
+    const payload: Partial<Student> = {
+      is_apaar_generated: 'YES',
+      is_aadhaar_provided: isAadhaarProvided || student.is_aadhaar_provided || 'YES',
+      is_aadhaar_verified: isAadhaarVerified || student.is_aadhaar_verified || 'YES',
+      apaar_pending_reason: '', // APAAR ID बन गई है, इसलिए लंबित कारण खाली
+      survey_status: 'SURVEY COMPLETED',
+      surveyor_name: currentUser?.name || 'Surveyor',
+      survey_date: new Date().toISOString(),
+    };
+
+    const success = await updateStudentSurvey(student.id, payload);
+    setIsSaving(false);
+
+    if (success) {
+      setSuccessNotice('विद्यार्थी की APAAR ID बन गई है - सर्वेक्षण सफलतापूर्वक सहेजा गया! (APAAR ID Generated)');
+      setTimeout(() => {
+        setSuccessNotice(null);
+        onClose();
+      }, 700);
+    }
+  };
+
+  // Open Full Form when user answers 'नहीं' (NO)
+  const handleSelectApaarNo = () => {
+    setIsApaarGenerated('NO');
+    setValidationErrors([]);
+  };
+
   const getPayload = (): Partial<Student> => ({
+    is_apaar_generated: isApaarGenerated || 'NO',
     student_name_marksheet: studentNameMarksheet,
     student_name_aadhaar: isAadhaarProvided === 'NO' ? '' : studentNameAadhaar,
     name_match_status: resolvedNameMatchStatus,
@@ -240,6 +290,21 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   }, [onClose]);
 
   const handleSave = async (autoAdvance: boolean = false) => {
+    // If APAAR ID is YES, direct submit
+    if (isApaarGenerated === 'YES') {
+      await handleDirectSubmitApaarYes();
+      return;
+    }
+
+    if (!isApaarGenerated) {
+      setValidationErrors(['कृपया पहले चुनें: क्या विद्यार्थी की APAAR ID बन गई है? (हाँ या नहीं चुनें)']);
+      const scrollContainer = document.getElementById('survey-modal-scroll');
+      if (scrollContainer) {
+        scrollContainer.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+      return;
+    }
+
     const errors: string[] = [];
 
     // 1. Aadhaar Provided & Verified (सबसे पहले)
@@ -448,17 +513,150 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
             </div>
           </div>
 
-          {/* SECTION 2: SURVEY FORM */}
-          <div className="bg-white border-2 border-blue-200 rounded-lg p-4 space-y-4 shadow-xs">
-            <div className="border-b border-blue-100 pb-2 flex items-center justify-between flex-wrap gap-2">
-              <span className="text-xs font-bold text-blue-900 uppercase tracking-wider flex items-center space-x-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-700"></span>
-                <span>APAAR Verification & Survey Details</span>
-              </span>
-              <span className="text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded">
-                * सभी फ़ील्ड भरना अनिवार्य है (All Fields Mandatory)
-              </span>
+          {/* PRIMARY QUESTION: क्या विद्यार्थी की APAAR ID बन गई है? */}
+          <div className="bg-gradient-to-r from-blue-50 via-indigo-50/50 to-blue-50 border-2 border-blue-300 rounded-xl p-4 sm:p-5 shadow-xs transition-all">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3.5 pb-2.5 border-b border-blue-200/80">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-lg bg-blue-700 text-white flex items-center justify-center shrink-0 shadow-xs font-black text-sm">
+                  ?
+                </div>
+                <div>
+                  <h4 className="text-sm sm:text-base font-extrabold text-slate-900 tracking-tight flex items-center gap-1.5 flex-wrap">
+                    <span>क्या विद्यार्थी की APAAR ID बन गई है?</span>
+                    <span className="text-rose-500 font-bold">*</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-500 font-medium">
+                    (Has the student's APAAR ID been generated?)
+                  </p>
+                </div>
+              </div>
+
+              {isApaarGenerated && (
+                <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full self-start sm:self-auto border ${
+                  isApaarGenerated === 'YES'
+                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                    : 'bg-amber-100 text-amber-900 border-amber-300'
+                }`}>
+                  {isApaarGenerated === 'YES' ? '✓ स्थिति: हाँ (APAAR ID बन गई है)' : 'स्थिति: नहीं (लंबित - पूरा फॉर्म खुला है)'}
+                </span>
+              )}
             </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* BUTTON 1: हाँ (YES) - Direct Submit */}
+              <button
+                type="button"
+                onClick={handleDirectSubmitApaarYes}
+                disabled={isSaving}
+                className={`group relative p-3.5 sm:p-4 rounded-xl border-2 text-left transition-all cursor-pointer flex items-center space-x-3 active:scale-[0.99] ${
+                  isApaarGenerated === 'YES'
+                    ? 'bg-emerald-600 text-white border-emerald-700 shadow-md ring-3 ring-emerald-300'
+                    : 'bg-white hover:bg-emerald-50/80 border-slate-300 hover:border-emerald-500 text-slate-800 shadow-2xs'
+                }`}
+              >
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-colors ${
+                  isApaarGenerated === 'YES' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-700 group-hover:bg-emerald-200'
+                }`}>
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center space-x-2 flex-wrap">
+                    <span className={`text-sm sm:text-base font-extrabold ${isApaarGenerated === 'YES' ? 'text-white' : 'text-emerald-800'}`}>
+                      हाँ (YES)
+                    </span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      isApaarGenerated === 'YES' ? 'bg-emerald-800/80 text-emerald-100' : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                    }`}>
+                      ⚡ डायरेक्ट सबमिट
+                    </span>
+                  </div>
+                  <p className={`text-[11px] mt-0.5 leading-snug ${isApaarGenerated === 'YES' ? 'text-emerald-100' : 'text-slate-500'}`}>
+                    {isSaving && isApaarGenerated === 'YES' ? 'सहेजा जा रहा है...' : 'APAAR ID बन गई है (क्लिक करते ही तुरंत सबमिट होगा)'}
+                  </p>
+                </div>
+              </button>
+
+              {/* BUTTON 2: नहीं (NO) - Open Full Form */}
+              <button
+                type="button"
+                onClick={handleSelectApaarNo}
+                disabled={isSaving}
+                className={`group relative p-3.5 sm:p-4 rounded-xl border-2 text-left transition-all cursor-pointer flex items-center space-x-3 active:scale-[0.99] ${
+                  isApaarGenerated === 'NO'
+                    ? 'bg-amber-600 text-white border-amber-700 shadow-md ring-3 ring-amber-300'
+                    : 'bg-white hover:bg-amber-50/80 border-slate-300 hover:border-amber-500 text-slate-800 shadow-2xs'
+                }`}
+              >
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-colors ${
+                  isApaarGenerated === 'NO' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-700 group-hover:bg-amber-200'
+                }`}>
+                  <Ban className="w-6 h-6" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center space-x-2 flex-wrap">
+                    <span className={`text-sm sm:text-base font-extrabold ${isApaarGenerated === 'NO' ? 'text-white' : 'text-amber-900'}`}>
+                      नहीं (NO)
+                    </span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      isApaarGenerated === 'NO' ? 'bg-amber-800/80 text-amber-100' : 'bg-amber-100 text-amber-900 border border-amber-200'
+                    }`}>
+                      📋 पूरा फॉर्म खोलें
+                    </span>
+                  </div>
+                  <p className={`text-[11px] mt-0.5 leading-snug ${isApaarGenerated === 'NO' ? 'text-amber-100' : 'text-slate-500'}`}>
+                    लंबित है (आधार, दस्तावेज़ व लंबित रहने का कारण दर्ज करें)
+                  </p>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* GUIDANCE MESSAGE WHEN NOT SELECTED */}
+          {isApaarGenerated === null && (
+            <div className="bg-slate-50 border border-dashed border-slate-300 rounded-xl p-6 text-center text-slate-500 space-y-2 animate-in fade-in duration-150">
+              <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 mx-auto flex items-center justify-center">
+                <ClipboardCheck className="w-5 h-5" />
+              </div>
+              <p className="text-xs font-bold text-slate-800">
+                कृपया ऊपर दिए गए विकल्प में से चुनें:
+              </p>
+              <p className="text-[11px] text-slate-600 max-w-md mx-auto leading-relaxed">
+                यदि विद्यार्थी की <strong>APAAR ID बन गई है</strong>, तो <strong>"हाँ (YES)"</strong> पर क्लिक करें — यह तुरंत डायरेक्ट सबमिट हो जाएगा।<br />
+                यदि APAAR ID अभी <strong>नहीं बनी है</strong>, तो <strong>"नहीं (NO)"</strong> पर क्लिक करें — पूरा सर्वेक्षण फॉर्म नीचे खुल जाएगा।
+              </p>
+            </div>
+          )}
+
+          {/* CONFIRMATION MESSAGE WHEN YES IS SELECTED */}
+          {isApaarGenerated === 'YES' && (
+            <div className="bg-emerald-50 border border-emerald-300 rounded-xl p-4 sm:p-5 text-emerald-900 space-y-2 animate-in fade-in duration-150 shadow-2xs">
+              <div className="flex items-start space-x-3">
+                <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <h4 className="text-sm font-bold text-emerald-900">
+                    विद्यार्थी की APAAR ID बन चुकी है (APAAR ID Generated - Survey Completed)
+                  </h4>
+                  <p className="text-xs text-emerald-800 leading-relaxed">
+                    इस विद्यार्थी का सर्वेक्षण पूर्ण रूप से दर्ज कर दिया गया है।<br />
+                    यदि आप इस विद्यार्थी का विवरण या लंबित रहने का कारण बदलना चाहते हैं, तो ऊपर <strong>"नहीं (NO)"</strong> पर क्लिक करके पूरा फॉर्म खोल सकते हैं।
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* SECTION 2: FULL SURVEY FORM (ONLY WHEN 'नहीं' IS SELECTED) */}
+          {isApaarGenerated === 'NO' && (
+            <div className="bg-white border-2 border-blue-200 rounded-lg p-4 space-y-4 shadow-xs animate-in fade-in duration-150">
+              <div className="border-b border-blue-100 pb-2 flex items-center justify-between flex-wrap gap-2">
+                <span className="text-xs font-bold text-blue-900 uppercase tracking-wider flex items-center space-x-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-700"></span>
+                  <span>APAAR Pending Verification & Survey Details</span>
+                </span>
+                <span className="text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded">
+                  * सभी फ़ील्ड भरना अनिवार्य है (All Fields Mandatory)
+                </span>
+              </div>
 
             {/* 1. AADHAAR AVAILABILITY & VERIFICATION (आधार उपलब्धता व सत्यापन) - SABSE PAHLE */}
             <div className="bg-slate-50 p-3 sm:p-3.5 rounded-lg border border-slate-200 space-y-3">
@@ -801,6 +999,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
             </div>
 
           </div>
+          )}
 
         </div>
 
@@ -839,25 +1038,41 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               Close (बंद करें)
             </button>
             
-            <button
-              type="button"
-              onClick={() => handleSave(false)}
-              disabled={isSaving}
-              className="flex-1 sm:flex-none bg-slate-800 hover:bg-slate-900 active:bg-slate-950 text-white text-xs font-bold px-3.5 sm:px-4 py-2.5 sm:py-2 rounded-lg shadow-xs flex items-center justify-center space-x-1.5 cursor-pointer"
-            >
-              <Save className="w-3.5 h-3.5" />
-              <span>{isSaving ? 'सहेजा जा रहा है...' : 'Save (सहेजें)'}</span>
-            </button>
+            {isApaarGenerated === 'NO' && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => handleSave(false)}
+                  disabled={isSaving}
+                  className="flex-1 sm:flex-none bg-slate-800 hover:bg-slate-900 active:bg-slate-950 text-white text-xs font-bold px-3.5 sm:px-4 py-2.5 sm:py-2 rounded-lg shadow-xs flex items-center justify-center space-x-1.5 cursor-pointer"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>{isSaving ? 'सहेजा जा रहा है...' : 'Save (सहेजें)'}</span>
+                </button>
 
-            {hasNext && (
+                {hasNext && (
+                  <button
+                    type="button"
+                    onClick={() => handleSave(true)}
+                    disabled={isSaving}
+                    className="w-full sm:w-auto bg-blue-700 hover:bg-blue-800 active:bg-blue-900 text-white text-xs font-bold px-4 py-2.5 sm:py-2 rounded-lg shadow-xs flex items-center justify-center space-x-1.5 cursor-pointer"
+                  >
+                    <span>Save & Next</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </>
+            )}
+
+            {isApaarGenerated === 'YES' && (
               <button
                 type="button"
-                onClick={() => handleSave(true)}
+                onClick={handleDirectSubmitApaarYes}
                 disabled={isSaving}
-                className="w-full sm:w-auto bg-blue-700 hover:bg-blue-800 active:bg-blue-900 text-white text-xs font-bold px-4 py-2.5 sm:py-2 rounded-lg shadow-xs flex items-center justify-center space-x-1.5 cursor-pointer"
+                className="flex-1 sm:flex-none bg-emerald-700 hover:bg-emerald-800 active:bg-emerald-900 text-white text-xs font-bold px-3.5 sm:px-4 py-2.5 sm:py-2 rounded-lg shadow-xs flex items-center justify-center space-x-1.5 cursor-pointer"
               >
-                <span>Save & Next</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>{isSaving ? 'सहेजा जा रहा है...' : 'पुनः सहेजें (Save APAAR)'}</span>
               </button>
             )}
           </div>

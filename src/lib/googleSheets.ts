@@ -53,6 +53,7 @@ export async function saveToGoogleSheet(
     districtName?: string;
     documentsAvailable?: string;
     remarks?: string;
+    isApaarGenerated?: string;
   }
 ): Promise<boolean> {
   const url = customUrl || getGoogleScriptUrl();

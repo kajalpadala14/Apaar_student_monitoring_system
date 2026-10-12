@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useStudents } from '../../context/StudentContext';
 import { Student } from '../../types/student';
 import { StudentDetailModal } from './StudentDetailModal';
-import { Search, Filter, RotateCcw, ChevronLeft, ChevronRight, ClipboardCheck, ArrowUpDown, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, Filter, RotateCcw, ChevronLeft, ChevronRight, ClipboardCheck, ArrowUpDown, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react';
 import { SURVEY_REASONS, SURVEY_STATUS_OPTIONS } from '../../types/student';
 
 export const StudentListView: React.FC = () => {
@@ -509,9 +509,16 @@ export const StudentListView: React.FC = () => {
                     </div>
                     <div>
                       <span className="text-slate-400 block text-[10px]">लंबित कारण:</span>
-                      <span className="text-amber-800 font-medium truncate block" title={student.apaar_pending_reason || '-'}>
-                        {student.apaar_pending_reason || '-'}
-                      </span>
+                      {student.is_apaar_generated === 'YES' ? (
+                        <span className="text-emerald-700 font-bold text-xs inline-flex items-center space-x-1">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                          <span>APAAR बन गई (YES)</span>
+                        </span>
+                      ) : (
+                        <span className="text-amber-800 font-medium truncate block" title={student.apaar_pending_reason || '-'}>
+                          {student.apaar_pending_reason || '-'}
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -668,8 +675,15 @@ export const StudentListView: React.FC = () => {
                           {student.survey_status}
                         </span>
                       </td>
-                      <td className="py-2.5 px-3 text-slate-600 max-w-[140px] truncate" title={student.apaar_pending_reason || '-'}>
-                        {student.apaar_pending_reason || '-'}
+                      <td className="py-2.5 px-3 text-slate-600 max-w-[140px] truncate" title={student.is_apaar_generated === 'YES' ? 'APAAR ID बन गई है' : (student.apaar_pending_reason || '-')}>
+                        {student.is_apaar_generated === 'YES' ? (
+                          <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold inline-flex items-center space-x-1">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                            <span>APAAR बन गई</span>
+                          </span>
+                        ) : (
+                          student.apaar_pending_reason || '-'
+                        )}
                       </td>
                       <td className="py-2.5 px-3 text-center whitespace-nowrap">
                         <button

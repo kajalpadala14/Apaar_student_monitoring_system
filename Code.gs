@@ -24,8 +24,8 @@
  * ==============================================================================
  */
 
-// शीट का नाम (यदि आपकी शीट का नाम अलग है तो यहाँ बदलें, जैसे "Sheet1" या "Students")
-var SHEET_NAME = "Sheet1";
+// शीट का नाम (आपकी शीट के टैब का नाम: "APAAR Pending Status Report" या "Sheet1")
+var SHEET_NAME = "APAAR Pending Status Report";
 
 /**
  * Google Sheets मेन्यू में 'APAAR Survey' ऑप्शन जोड़ना
@@ -131,6 +131,7 @@ function doGet(e) {
         documents_available: colMap.documentsAvailable !== -1 ? String(row[colMap.documentsAvailable] || "").trim() : "",
         is_aadhaar_provided: isAadhaarProvided,
         is_aadhaar_verified: isAadhaarVerified,
+        is_apaar_generated: colMap.isApaarGenerated !== -1 ? String(row[colMap.isApaarGenerated] || "").trim() : "",
         apaar_pending_reason: reason,
         survey_status: isCompleted ? "SURVEY COMPLETED" : "PENDING"
       });
@@ -323,6 +324,12 @@ function doPost(e) {
       sheet.getRange(targetRow, colIdx).setValue(docAvail);
     }
 
+    var isApaarGen = body.isApaarGenerated !== undefined ? body.isApaarGenerated : body.is_apaar_generated;
+    if (isApaarGen !== undefined && isApaarGen !== "") {
+      var colIdx = getOrCreateCol("isApaarGenerated", "क्या विद्यार्थी की APAAR ID बन गई है?");
+      sheet.getRange(targetRow, colIdx).setValue(isApaarGen);
+    }
+
     SpreadsheetApp.flush();
     lock.releaseLock();
 
@@ -393,6 +400,17 @@ function getColumnMapping(headers) {
     else if (h.indexOf("provided") !== -1) map.isAadhaarProvided = i;
     else if (h.indexOf("verified") !== -1) map.isAadhaarVerified = i;
     else if (h.indexOf("reason") !== -1 || h.indexOf("कारण") !== -1) map.reason = i;
+    else if (
+      h.indexOf("apaar generated") !== -1 ||
+      h.indexOf("apaar id generated") !== -1 ||
+      h.indexOf("apaar बन गई") !== -1 ||
+      h.indexOf("apaar id बन गई") !== -1 ||
+      h.indexOf("अपार आईडी बन गई") !== -1 ||
+      h.indexOf("क्या विद्यार्थी की apaar") !== -1 ||
+      h.indexOf("क्या विद्यार्थी की अपार") !== -1 ||
+      h.indexOf("apaar id बन गई है") !== -1 ||
+      h.indexOf("is apaar") !== -1
+    ) map.isApaarGenerated = i;
   }
 
   return map;
@@ -410,6 +428,7 @@ function getStats(sheet) {
 
   var total = 0;
   var completed = 0;
+  var apaarGenerated = 0;
 
   for (var i = 1; i < data.length; i++) {
     var pen = data[i][colMap.studentPen];
@@ -419,9 +438,14 @@ function getStats(sheet) {
     var isProvided = String(data[i][colMap.isAadhaarProvided] || "").trim();
     var isVerified = String(data[i][colMap.isAadhaarVerified] || "").trim();
     var reason = String(data[i][colMap.reason] || "").trim();
+    var isApaar = (colMap.isApaarGenerated !== -1 && colMap.isApaarGenerated !== undefined) ? String(data[i][colMap.isApaarGenerated] || "").trim().toUpperCase() : "";
 
-    if (isProvided || isVerified || reason) {
+    if (isProvided || isVerified || reason || isApaar) {
       completed++;
+    }
+
+    if (isApaar === "YES" || reason === "APAAR ID बन गई है") {
+      apaarGenerated++;
     }
   }
 
@@ -429,6 +453,7 @@ function getStats(sheet) {
     totalStudents: total,
     surveyCompleted: completed,
     surveyPending: total - completed,
+    apaarGenerated: apaarGenerated,
     completionPercentage: total > 0 ? ((completed / total) * 100).toFixed(1) + "%" : "0%"
   };
 }
@@ -445,6 +470,7 @@ function showSurveyStats() {
   ui.alert(
     "📊 Dantewada APAAR Survey Status",
     "कुल छात्र (Total Students): " + stats.totalStudents + "\n" +
+    "✨ APAAR ID बन गई (Generated): " + stats.apaarGenerated + "\n" +
     "सर्वे पूर्ण (Completed): " + stats.surveyCompleted + "\n" +
     "सर्वे लंबित (Pending): " + stats.surveyPending + "\n" +
     "प्रगति (Completion %): " + stats.completionPercentage,
@@ -458,7 +484,7 @@ function showSurveyStats() {
 function verifyHeaders() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = SHEET_NAME ? (ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0]) : ss.getSheets()[0];
-  var headers = sheet.getRange(1, 1, 1, 13).getValues()[0];
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   var colMap = getColumnMapping(headers);
 
   var ui = SpreadsheetApp.getUi();
@@ -472,7 +498,8 @@ function verifyHeaders() {
     "J: Student Name -> " + headers[colMap.studentName] + "\n" +
     "K: Aadhaar Provided -> " + headers[colMap.isAadhaarProvided] + "\n" +
     "L: Aadhaar Verified -> " + headers[colMap.isAadhaarVerified] + "\n" +
-    "M: Reason -> " + headers[colMap.reason],
+    "M: Reason -> " + headers[colMap.reason] + "\n" +
+    "APAAR Generated -> " + (colMap.isApaarGenerated !== -1 && colMap.isApaarGenerated !== undefined ? headers[colMap.isApaarGenerated] : "(Not configured yet)"),
     ui.ButtonSet.OK
   );
 }
@@ -535,7 +562,8 @@ function setupSurveyColumns(sheet) {
     { key: "dobMatchStatus", name: "DOB Match Status" },
     { key: "fatherName", name: "Father Name" },
     { key: "districtName", name: "District Name" },
-    { key: "documentsAvailable", name: "Documents Available" }
+    { key: "documentsAvailable", name: "Documents Available" },
+    { key: "isApaarGenerated", name: "क्या विद्यार्थी की APAAR ID बन गई है?" }
   ];
 
   var added = [];

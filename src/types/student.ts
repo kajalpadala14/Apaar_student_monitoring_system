@@ -36,6 +36,8 @@ export interface Student {
   documents_available?: 'YES' | 'NO' | string; // Documents Available (YES / NO)
 
   // Survey fields (Aadhaar, Reasons, Documents, Verification)
+  is_apaar_generated?: 'YES' | 'NO' | string; // क्या विद्यार्थी की APAAR ID बन गई है? (YES / NO)
+  apaar_id?: string;
   is_aadhaar_provided?: string; // Is AADHAAR Provided (YES / NO)
   is_aadhaar_verified?: string; // Is AADHAAR Verified (YES / NO)
   apaar_pending_reason?: string; // Reason For Not Generated Apaar Id (अपार आईडी नहीं बनने का कारण)
@@ -76,4 +78,6 @@ export interface BlockSummary {
   followUpRequired: number;
   resolved: number;
   completionRate: number;
+  apaarGenerated?: number;
+  apaarRate?: number;
 }

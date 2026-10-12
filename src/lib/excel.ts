@@ -36,6 +36,7 @@ export function formatStudentDetailedRow(s: Student, idx: number) {
     'दस्तावेज़ उपलब्धता (Documents Available)': s.documents_available || '',
     'Is AADHAAR Provided (आधार उपलब्ध)': s.is_aadhaar_provided || '',
     'Is AADHAAR Verified (आधार सत्यापित)': s.is_aadhaar_verified || '',
+    'क्या विद्यार्थी की APAAR ID बन गई है?': s.is_apaar_generated || (s.apaar_pending_reason === 'APAAR ID बन गई है' || (s.survey_status === 'SURVEY COMPLETED' && !s.apaar_pending_reason) ? 'YES' : 'NO'),
     'Reason For Not Generated Apaar Id (अपार आईडी नहीं बनने का कारण)': s.apaar_pending_reason || '',
     'अन्य कारण': s.other_reason || '',
     'रिमार्क्स (Remarks)': s.remarks || '',
