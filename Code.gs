@@ -102,8 +102,9 @@ function doGet(e) {
       var isAadhaarProvided = String(row[colMap.isAadhaarProvided] || "").trim();
       var isAadhaarVerified = String(row[colMap.isAadhaarVerified] || "").trim();
       var reason = String(row[colMap.reason] || "").trim();
+      var isApaarGen = colMap.isApaarGenerated !== -1 && colMap.isApaarGenerated !== undefined ? String(row[colMap.isApaarGenerated] || "").trim() : "";
 
-      var isCompleted = Boolean(isAadhaarProvided || isAadhaarVerified || reason);
+      var isCompleted = Boolean(isAadhaarProvided || isAadhaarVerified || reason || isApaarGen);
 
       students.push({
         rowIndex: i + 1, // 1-based sheet row
@@ -373,13 +374,34 @@ function getColumnMapping(headers) {
     dobMatchStatus: -1,
     fatherName: -1,
     districtName: -1,
-    documentsAvailable: -1
+    documentsAvailable: -1,
+    isApaarGenerated: 20 // Default Fallback to Column U (21st col = index 20)
   };
 
   // हेडर के नाम से डायनेमिक मैचिंग
   for (var i = 0; i < headers.length; i++) {
     var h = headers[i].toLowerCase().replace(/\s+/g, " ");
-    if (h.indexOf("block") !== -1) map.blockName = i;
+
+    // 1. सर्वोच्च प्राथमिकता: क्या विद्यार्थी की APAAR ID बन गई है? (Column U)
+    if (
+      h.indexOf("apaar generated") !== -1 ||
+      h.indexOf("apaar id generated") !== -1 ||
+      h.indexOf("apaar बन गई") !== -1 ||
+      h.indexOf("apaar id बन गई") !== -1 ||
+      h.indexOf("अपार आईडी बन गई") !== -1 ||
+      h.indexOf("अपार बन गई") !== -1 ||
+      h.indexOf("विद्यार्थी की apaar") !== -1 ||
+      h.indexOf("विद्यार्थी की अपार") !== -1 ||
+      h.indexOf("क्या विद्यार्थी की apaar") !== -1 ||
+      h.indexOf("क्या विद्यार्थी की अपार") !== -1 ||
+      h.indexOf("apaar id बन गई है") !== -1 ||
+      h.indexOf("is apaar") !== -1 ||
+      h.indexOf("apaar id") !== -1 ||
+      h.indexOf("apaar_id") !== -1
+    ) {
+      map.isApaarGenerated = i;
+    }
+    else if (h.indexOf("block") !== -1) map.blockName = i;
     else if (h.indexOf("school name") !== -1) map.schoolName = i;
     else if (h.indexOf("udise") !== -1) map.udiseCode = i;
     else if (h.indexOf("cluster") !== -1 || h.indexOf("संकुल") !== -1) map.clusterName = i;
@@ -390,7 +412,7 @@ function getColumnMapping(headers) {
     else if (h.indexOf("pen") !== -1) map.studentPen = i;
     else if (h.indexOf("name match") !== -1 || h.indexOf("नाम मिलान") !== -1) map.nameMatchStatus = i;
     else if (h.indexOf("aadhaar") !== -1 && (h.indexOf("name") !== -1 || h.indexOf("नाम") !== -1)) map.studentNameAadhaar = i;
-    else if (h.indexOf("student name") !== -1 || h.indexOf("विद्यार्थी") !== -1) map.studentName = i;
+    else if (h.indexOf("student name") !== -1 || h.indexOf("विद्यार्थी का नाम") !== -1 || (h.indexOf("विद्यार्थी") !== -1 && h.indexOf("apaar") === -1 && h.indexOf("अपार") === -1)) map.studentName = i;
     else if (h.indexOf("dob match") !== -1 || h.indexOf("जन्मतिथि मिलान") !== -1) map.dobMatchStatus = i;
     else if ((h.indexOf("dob") !== -1 || h.indexOf("जन्म") !== -1) && h.indexOf("aadhaar") !== -1) map.dobAadhaar = i;
     else if ((h.indexOf("dob") !== -1 || h.indexOf("जन्म") !== -1) && h.indexOf("marksheet") !== -1) map.dobMarksheet = i;
@@ -400,17 +422,6 @@ function getColumnMapping(headers) {
     else if (h.indexOf("provided") !== -1) map.isAadhaarProvided = i;
     else if (h.indexOf("verified") !== -1) map.isAadhaarVerified = i;
     else if (h.indexOf("reason") !== -1 || h.indexOf("कारण") !== -1) map.reason = i;
-    else if (
-      h.indexOf("apaar generated") !== -1 ||
-      h.indexOf("apaar id generated") !== -1 ||
-      h.indexOf("apaar बन गई") !== -1 ||
-      h.indexOf("apaar id बन गई") !== -1 ||
-      h.indexOf("अपार आईडी बन गई") !== -1 ||
-      h.indexOf("क्या विद्यार्थी की apaar") !== -1 ||
-      h.indexOf("क्या विद्यार्थी की अपार") !== -1 ||
-      h.indexOf("apaar id बन गई है") !== -1 ||
-      h.indexOf("is apaar") !== -1
-    ) map.isApaarGenerated = i;
   }
 
   return map;
@@ -488,18 +499,23 @@ function verifyHeaders() {
   var colMap = getColumnMapping(headers);
 
   var ui = SpreadsheetApp.getUi();
+  var getColLetter = function(idx) {
+    return (idx !== -1 && idx !== undefined) ? String.fromCharCode(65 + idx) : "N/A";
+  };
+
   ui.alert(
     "✅ Column Mapping Verification",
-    "A: Block -> " + headers[colMap.blockName] + "\n" +
-    "B: School -> " + headers[colMap.schoolName] + "\n" +
-    "C: UDISE -> " + headers[colMap.udiseCode] + "\n" +
-    "D: Cluster -> " + headers[colMap.clusterName] + "\n" +
-    "I: Student PEN -> " + headers[colMap.studentPen] + "\n" +
-    "J: Student Name -> " + headers[colMap.studentName] + "\n" +
-    "K: Aadhaar Provided -> " + headers[colMap.isAadhaarProvided] + "\n" +
-    "L: Aadhaar Verified -> " + headers[colMap.isAadhaarVerified] + "\n" +
-    "M: Reason -> " + headers[colMap.reason] + "\n" +
-    "APAAR Generated -> " + (colMap.isApaarGenerated !== -1 && colMap.isApaarGenerated !== undefined ? headers[colMap.isApaarGenerated] : "(Not configured yet)"),
+    "Block (" + getColLetter(colMap.blockName) + "): " + headers[colMap.blockName] + "\n" +
+    "School (" + getColLetter(colMap.schoolName) + "): " + headers[colMap.schoolName] + "\n" +
+    "UDISE (" + getColLetter(colMap.udiseCode) + "): " + headers[colMap.udiseCode] + "\n" +
+    "Cluster (" + getColLetter(colMap.clusterName) + "): " + headers[colMap.clusterName] + "\n" +
+    "Student PEN (" + getColLetter(colMap.studentPen) + "): " + headers[colMap.studentPen] + "\n" +
+    "Student Name (" + getColLetter(colMap.studentName) + "): " + headers[colMap.studentName] + "\n" +
+    "Aadhaar Provided (" + getColLetter(colMap.isAadhaarProvided) + "): " + headers[colMap.isAadhaarProvided] + "\n" +
+    "Aadhaar Verified (" + getColLetter(colMap.isAadhaarVerified) + "): " + headers[colMap.isAadhaarVerified] + "\n" +
+    "Reason (" + getColLetter(colMap.reason) + "): " + headers[colMap.reason] + "\n" +
+    "✨ APAAR Generated (कॉलम " + getColLetter(colMap.isApaarGenerated) + "): " + (colMap.isApaarGenerated !== -1 && colMap.isApaarGenerated !== undefined ? headers[colMap.isApaarGenerated] : "(Not Found)") + "\n" +
+    "Documents (" + getColLetter(colMap.documentsAvailable) + "): " + headers[colMap.documentsAvailable],
     ui.ButtonSet.OK
   );
 }
