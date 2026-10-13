@@ -175,6 +175,7 @@ export const ReportsView: React.FC = () => {
     'कक्षा',
     'पेन नंबर',
     'विद्यार्थी नाम (मार्कशीट)',
+    'APAAR बन गई?',
     'नाम मिलान',
     'जन्मतिथि मिलान',
     'दस्तावेज़ उपलब्धता',
@@ -193,6 +194,7 @@ export const ReportsView: React.FC = () => {
     s.class_name || '',
     s.student_pen_number || '',
     s.student_name_marksheet || '',
+    s.is_apaar_generated === 'YES' ? 'YES (बन गई)' : 'NO (लंबित)',
     s.name_match_status || '-',
     s.dob_match_status || '-',
     s.documents_available || '-',
@@ -584,6 +586,51 @@ export const ReportsView: React.FC = () => {
     });
   };
 
+  // 6B. APAAR ID Generated Report (बन गई है - YES)
+  const handlePreviewApaarGeneratedExcel = () => {
+    const apaarStudents = filteredStudents.filter((s) => s.is_apaar_generated === 'YES');
+    const rows = apaarStudents.map(studentToPreviewRow);
+    setPreviewData({
+      title: `APAAR ID Generated Students Report - बन गई (YES) (${apaarStudents.length.toLocaleString('en-IN')} छात्र)`,
+      format: 'excel',
+      filename: 'Dantewada_APAAR_ID_Generated_Students_Report',
+      sheetName: 'APAAR_Generated',
+      headers: detailedPreviewHeaders,
+      rows,
+      totalRecords: apaarStudents.length,
+      onDownload: () => exportStudentDetailedReport(apaarStudents, 'Dantewada_APAAR_ID_Generated_Students_Report')
+    });
+  };
+
+  const handlePreviewApaarGeneratedPDF = () => {
+    const apaarStudents = filteredStudents.filter((s) => s.is_apaar_generated === 'YES');
+    const pdfHeaders = ['S.No', 'Block', 'Cluster', 'School Name', 'Class', 'Student Name', 'PEN', 'APAAR Status'];
+    const pdfRows = apaarStudents.slice(0, 100).map((s, idx) => [
+      idx + 1,
+      s.block_name || '-',
+      s.sankul_name || '-',
+      s.school_name || '-',
+      s.class_name || '-',
+      s.student_name_marksheet || '-',
+      s.student_pen_number || '-',
+      'YES (बन गई)'
+    ]);
+    setPreviewData({
+      title: `APAAR ID GENERATED STUDENTS REPORT (Top 100 Snapshot - Total: ${apaarStudents.length})`,
+      format: 'pdf',
+      filename: 'Dantewada_APAAR_Generated_Students_PDF',
+      headers: pdfHeaders,
+      rows: pdfRows,
+      totalRecords: apaarStudents.length,
+      onDownload: () => generatePDFReport({
+        title: `APAAR ID GENERATED STUDENTS REPORT (Total: ${apaarStudents.length})`,
+        filename: 'Dantewada_APAAR_Generated_Students_PDF',
+        headers: pdfHeaders,
+        rows: pdfRows
+      })
+    });
+  };
+
   // 7. Master Detailed Survey
   const handlePreviewDetailedExcel = () => {
     const rows = filteredStudents.map(studentToPreviewRow);
@@ -650,7 +697,7 @@ export const ReportsView: React.FC = () => {
             <Filter className="w-3.5 h-3.5 text-blue-700" />
             <span>Filter Report Scope (रिपोर्ट फ़िल्टर)</span>
           </span>
-          {(activeFilters.block || activeFilters.sankul || activeFilters.school || activeFilters.surveyStatus || activeFilters.reason) && (
+          {(activeFilters.block || activeFilters.sankul || activeFilters.school || activeFilters.surveyStatus || activeFilters.reason || activeFilters.apaarStatus) && (
             <button
               onClick={resetFilters}
               className="text-xs text-rose-600 hover:text-rose-800 font-medium flex items-center space-x-1 cursor-pointer"
@@ -661,7 +708,7 @@ export const ReportsView: React.FC = () => {
           )}
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-xs">
           <div>
             <label className="text-[10px] text-slate-500 block mb-0.5">Block</label>
             <select
@@ -748,6 +795,19 @@ export const ReportsView: React.FC = () => {
               {availableReasons.map((r) => (
                 <option key={r} value={r}>{r}</option>
               ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-[10px] text-slate-500 block mb-0.5 font-medium text-emerald-800">APAAR स्थिति</label>
+            <select
+              value={activeFilters.apaarStatus || ''}
+              onChange={(e) => setActiveFilters((prev) => ({ ...prev, apaarStatus: e.target.value }))}
+              className="w-full bg-slate-50 border border-emerald-300 rounded p-1.5 text-slate-800 text-xs font-semibold"
+            >
+              <option value="">All (सभी छात्र)</option>
+              <option value="YES">✓ APAAR बन गई (YES)</option>
+              <option value="NO">⏳ APAAR लंबित (NO)</option>
             </select>
           </div>
         </div>
@@ -996,6 +1056,40 @@ export const ReportsView: React.FC = () => {
             <button
               onClick={handlePreviewCompletedPDF}
               className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-300 text-xs font-semibold py-1.5 px-2 rounded flex items-center justify-center space-x-1 cursor-pointer"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>PDF</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Card 6B: APAAR ID Generated Report (बन गई है - YES) */}
+        <div className="bg-white border-2 border-emerald-400 rounded-lg p-4 shadow-2xs flex flex-col justify-between bg-gradient-to-b from-emerald-50/50 to-white">
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-emerald-900 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded uppercase">
+                APAAR ID बन गई (YES)
+              </span>
+              <span className="text-[11px] font-bold text-emerald-800 tabular-nums">
+                {filteredStudents.filter(s => s.is_apaar_generated === 'YES').length} छात्र
+              </span>
+            </div>
+            <h3 className="text-sm font-bold text-slate-900 mt-2">6B. APAAR Generated Report</h3>
+            <p className="text-xs text-slate-500 mt-1">
+              उन सभी विद्यार्थियों की विशेष सूची जिनकी APAAR ID बन चुकी है (YES)। एक्सेल व पीडीएफ डाउनलोड करें।
+            </p>
+          </div>
+          <div className="mt-4 pt-3 border-t border-emerald-100 flex items-center space-x-2">
+            <button
+              onClick={handlePreviewApaarGeneratedExcel}
+              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold py-1.5 px-2 rounded flex items-center justify-center space-x-1 cursor-pointer shadow-2xs transition-colors"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              <span>Excel</span>
+            </button>
+            <button
+              onClick={handlePreviewApaarGeneratedPDF}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-1.5 px-2 rounded flex items-center justify-center space-x-1 cursor-pointer shadow-2xs transition-colors"
             >
               <FileText className="w-3.5 h-3.5" />
               <span>PDF</span>

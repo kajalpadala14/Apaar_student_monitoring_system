@@ -218,13 +218,20 @@ export const DashboardView: React.FC = () => {
         </div>
 
         {/* Card 2: APAAR ID GENERATED (बन गई है) */}
-        <div className="bg-white border-2 border-emerald-300 rounded-xl p-3 sm:p-5 shadow-2xs flex flex-col justify-between transition-all hover:border-emerald-400 bg-gradient-to-br from-white via-white to-emerald-50/40">
+        <div 
+          onClick={() => {
+            setActiveFilters((prev) => ({ ...prev, apaarStatus: 'YES', surveyStatus: '' }));
+            setActiveTab('students');
+          }}
+          className="bg-white border-2 border-emerald-300 rounded-xl p-3 sm:p-5 shadow-2xs flex flex-col justify-between transition-all hover:border-emerald-500 hover:shadow-md cursor-pointer bg-gradient-to-br from-white via-white to-emerald-50/50 group"
+          title="क्लिक करें: APAAR बन गई (YES) वाले सभी विद्यार्थियों की सूची देखें"
+        >
           <div>
             <div className="flex items-center justify-between">
-              <span className="text-[10px] sm:text-xs font-extrabold text-emerald-800 uppercase tracking-wider truncate mr-1 flex items-center space-x-1">
+              <span className="text-[10px] sm:text-xs font-extrabold text-emerald-800 uppercase tracking-wider truncate mr-1 flex items-center space-x-1 group-hover:text-emerald-950">
                 <span>APAAR बन गई (YES)</span>
               </span>
-              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-100 border border-emerald-200 text-emerald-700 flex items-center justify-center shrink-0">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-100 border border-emerald-200 text-emerald-700 flex items-center justify-center shrink-0 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
                 <ShieldCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </div>
             </div>
@@ -238,7 +245,10 @@ export const DashboardView: React.FC = () => {
             </div>
           </div>
           <div className="mt-2 pt-1.5 sm:pt-2 border-t border-emerald-100 text-[10px] sm:text-xs text-emerald-800 flex items-center justify-between">
-            <span className="truncate font-semibold">आईडी जनरेट हो चुकी है</span>
+            <span className="truncate font-semibold flex items-center space-x-1">
+              <span>छात्र देखें</span>
+              <span>&rarr;</span>
+            </span>
             <span className="text-[9px] sm:text-[11px] text-emerald-600 hidden xs:inline">Direct & Verified</span>
           </div>
         </div>

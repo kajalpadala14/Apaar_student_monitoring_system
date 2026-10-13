@@ -161,18 +161,37 @@ export const StudentListView: React.FC = () => {
 
         <button
           onClick={() => {
-            setActiveFilters((prev) => ({ ...prev, surveyStatus: 'PENDING' }));
+            setActiveFilters((prev) => ({ ...prev, apaarStatus: prev.apaarStatus === 'YES' ? '' : 'YES', surveyStatus: '' }));
             setCurrentPage(1);
           }}
           className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer border flex items-center space-x-1.5 whitespace-nowrap shrink-0 ${
-            activeFilters.surveyStatus === 'PENDING'
+            activeFilters.apaarStatus === 'YES'
+              ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs ring-2 ring-emerald-300' 
+              : 'bg-white text-emerald-800 border-emerald-300 hover:bg-emerald-50'
+          }`}
+        >
+          <span>🛡️ APAAR बन गई (YES)</span>
+          <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+            activeFilters.apaarStatus === 'YES' ? 'bg-emerald-800 text-emerald-100' : 'bg-emerald-100 text-emerald-800'
+          }`}>
+            {students.filter(s => s.is_apaar_generated === 'YES').length.toLocaleString('en-IN')}
+          </span>
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveFilters((prev) => ({ ...prev, surveyStatus: 'PENDING', apaarStatus: '' }));
+            setCurrentPage(1);
+          }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer border flex items-center space-x-1.5 whitespace-nowrap shrink-0 ${
+            activeFilters.surveyStatus === 'PENDING' && !activeFilters.apaarStatus
               ? 'bg-amber-600 text-white border-amber-600 shadow-2xs ring-2 ring-amber-300' 
               : 'bg-white text-amber-900 border-amber-300 hover:bg-amber-50'
           }`}
         >
           <span>⏳ केवल लंबित छात्र (Pending)</span>
           <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-            activeFilters.surveyStatus === 'PENDING' ? 'bg-amber-800 text-amber-100' : 'bg-amber-100 text-amber-900'
+            activeFilters.surveyStatus === 'PENDING' && !activeFilters.apaarStatus ? 'bg-amber-800 text-amber-100' : 'bg-amber-100 text-amber-900'
           }`}>
             {students.filter(s => s.survey_status === 'PENDING').length.toLocaleString('en-IN')}
           </span>
@@ -180,18 +199,18 @@ export const StudentListView: React.FC = () => {
 
         <button
           onClick={() => {
-            setActiveFilters((prev) => ({ ...prev, surveyStatus: 'SURVEY COMPLETED' }));
+            setActiveFilters((prev) => ({ ...prev, surveyStatus: 'SURVEY COMPLETED', apaarStatus: '' }));
             setCurrentPage(1);
           }}
           className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer border flex items-center space-x-1.5 whitespace-nowrap shrink-0 ${
-            activeFilters.surveyStatus === 'SURVEY COMPLETED'
-              ? 'bg-emerald-700 text-white border-emerald-700 shadow-2xs' 
-              : 'bg-white text-emerald-900 border-emerald-300 hover:bg-emerald-50'
+            activeFilters.surveyStatus === 'SURVEY COMPLETED' && !activeFilters.apaarStatus
+              ? 'bg-blue-700 text-white border-blue-700 shadow-2xs' 
+              : 'bg-white text-blue-900 border-blue-300 hover:bg-blue-50'
           }`}
         >
           <span>✓ सर्वे पूर्ण (Completed)</span>
           <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-            activeFilters.surveyStatus === 'SURVEY COMPLETED' ? 'bg-emerald-900 text-emerald-100' : 'bg-emerald-100 text-emerald-900'
+            activeFilters.surveyStatus === 'SURVEY COMPLETED' && !activeFilters.apaarStatus ? 'bg-blue-900 text-blue-100' : 'bg-blue-100 text-blue-900'
           }`}>
             {students.filter(s => s.survey_status === 'SURVEY COMPLETED').length.toLocaleString('en-IN')}
           </span>

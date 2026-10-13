@@ -22,6 +22,7 @@ interface StudentFilterState {
   surveyStatus: string;
   reason: string;
   searchQuery: string;
+  apaarStatus: string; // 'YES' | 'NO' | ''
 }
 
 interface StudentContextType {
@@ -68,6 +69,7 @@ const initialFilters: StudentFilterState = {
   surveyStatus: '',
   reason: '',
   searchQuery: '',
+  apaarStatus: '',
 };
 
 const StudentContext = createContext<StudentContextType | undefined>(undefined);
@@ -357,6 +359,15 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       // Filter by reason
       if (activeFilters.reason && s.apaar_pending_reason !== activeFilters.reason) {
         return false;
+      }
+      // Filter by APAAR status ('YES' or 'NO')
+      if (activeFilters.apaarStatus) {
+        if (activeFilters.apaarStatus === 'YES' && s.is_apaar_generated !== 'YES') {
+          return false;
+        }
+        if (activeFilters.apaarStatus === 'NO' && s.is_apaar_generated === 'YES') {
+          return false;
+        }
       }
 
       // Search Query: supports student name (English & Hindi), PEN, School, UDISE, Father name

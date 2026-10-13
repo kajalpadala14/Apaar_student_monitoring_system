@@ -69,6 +69,7 @@ export const FilterBar: React.FC = () => {
     activeFilters.className,
     activeFilters.surveyStatus,
     activeFilters.reason,
+    activeFilters.apaarStatus,
   ].filter(Boolean).length;
 
   const isFiltered = activeFilterCount > 0;
@@ -113,7 +114,7 @@ export const FilterBar: React.FC = () => {
         </div>
       </div>
 
-      <div className={`${isMobileOpen ? 'grid' : 'hidden sm:grid'} grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3 pt-3`}>
+      <div className={`${isMobileOpen ? 'grid' : 'hidden sm:grid'} grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2.5 sm:gap-3 pt-3`}>
         {/* Block Filter */}
         <div>
           <label className="block text-[11px] font-medium text-slate-600 mb-1">
@@ -246,6 +247,22 @@ export const FilterBar: React.FC = () => {
             {reasons.map((r) => (
               <option key={r} value={r}>{r}</option>
             ))}
+          </select>
+        </div>
+
+        {/* APAAR ID Status Filter */}
+        <div>
+          <label className="block text-[11px] font-medium text-slate-600 mb-1">
+            APAAR स्थिति (ID Generated)
+          </label>
+          <select
+            value={activeFilters.apaarStatus || ''}
+            onChange={(e) => setActiveFilters((prev) => ({ ...prev, apaarStatus: e.target.value }))}
+            className="w-full h-9 text-xs bg-slate-50 border border-slate-200 text-slate-800 hover:border-slate-300 focus:bg-white focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 focus:outline-hidden rounded-lg px-2.5 transition-colors font-medium"
+          >
+            <option value="">सभी (All APAAR Status)</option>
+            <option value="YES">✓ APAAR बन गई (YES)</option>
+            <option value="NO">⏳ APAAR लंबित (NO)</option>
           </select>
         </div>
       </div>
