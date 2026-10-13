@@ -394,11 +394,7 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       else if (s.survey_status === 'FOLLOW-UP REQUIRED') followUp++;
       else if (s.survey_status === 'RESOLVED') resolved++;
 
-      if (
-        s.is_apaar_generated === 'YES' ||
-        s.apaar_pending_reason === 'APAAR ID बन गई है' ||
-        (s.survey_status === 'SURVEY COMPLETED' && !s.apaar_pending_reason)
-      ) {
+      if (s.is_apaar_generated === 'YES') {
         apaarGenerated++;
       }
     });
@@ -442,11 +438,7 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       else if (s.survey_status === 'FOLLOW-UP REQUIRED') entry.followUp++;
       else if (s.survey_status === 'RESOLVED') entry.resolved++;
 
-      if (
-        s.is_apaar_generated === 'YES' ||
-        s.apaar_pending_reason === 'APAAR ID बन गई है' ||
-        (s.survey_status === 'SURVEY COMPLETED' && !s.apaar_pending_reason)
-      ) {
+      if (s.is_apaar_generated === 'YES') {
         entry.apaarGenerated++;
       }
     });

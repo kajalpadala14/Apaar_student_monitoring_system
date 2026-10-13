@@ -69,11 +69,7 @@ export const DashboardView: React.FC = () => {
       else if (s.survey_status === 'FOLLOW-UP REQUIRED') item.followUp++;
       else if (s.survey_status === 'RESOLVED') item.resolved++;
 
-      if (
-        s.is_apaar_generated === 'YES' ||
-        s.apaar_pending_reason === 'APAAR ID बन गई है' ||
-        (s.survey_status === 'SURVEY COMPLETED' && !s.apaar_pending_reason)
-      ) {
+      if (s.is_apaar_generated === 'YES') {
         item.apaarGenerated++;
       }
     });
