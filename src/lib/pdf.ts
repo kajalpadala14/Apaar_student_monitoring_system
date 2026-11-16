@@ -89,9 +89,11 @@ export async function generatePDFReport({
   // Create off-screen container for rendering
   const renderContainer = document.createElement('div');
   renderContainer.style.position = 'fixed';
-  renderContainer.style.left = '-99999px';
+  renderContainer.style.left = '0';
   renderContainer.style.top = '0';
-  renderContainer.style.zIndex = '-9999';
+  renderContainer.style.width = `${pageWidthPx}px`;
+  renderContainer.style.zIndex = '-99999';
+  renderContainer.style.pointerEvents = 'none';
   renderContainer.style.background = '#ffffff';
   document.body.appendChild(renderContainer);
 
@@ -224,7 +226,13 @@ export async function generatePDFReport({
         scale: 2, // 2x DPI for crisp text and borders
         useCORS: true,
         logging: false,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        windowWidth: pageWidthPx,
+        windowHeight: pageHeightPx,
+        x: 0,
+        y: 0,
+        scrollX: 0,
+        scrollY: 0
       });
 
       const imgData = canvas.toDataURL('image/jpeg', 0.96);
