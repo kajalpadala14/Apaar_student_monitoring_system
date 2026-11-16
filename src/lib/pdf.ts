@@ -8,6 +8,7 @@ export interface PDFReportOptions {
   headers: string[];
   rows: (string | number)[][];
   orientation?: 'portrait' | 'landscape';
+  onProgress?: (current: number, total: number) => void;
 }
 
 function getColumnAlignment(header: string, sampleCell?: any): 'left' | 'center' | 'right' {
@@ -58,7 +59,8 @@ export async function generatePDFReport({
   filename,
   headers,
   rows,
-  orientation = 'landscape'
+  orientation = 'landscape',
+  onProgress
 }: PDFReportOptions): Promise<void> {
   // Graceful fallback for test or headless environments
   if (typeof window === 'undefined' || typeof document === 'undefined' || !document.body) {
@@ -71,7 +73,7 @@ export async function generatePDFReport({
   const isLandscape = orientation === 'landscape';
   const pageWidthPx = isLandscape ? 1120 : 790;
   const pageHeightPx = isLandscape ? 790 : 1120;
-  const rowsPerPage = isLandscape ? 22 : 30;
+  const rowsPerPage = isLandscape ? 25 : 32;
 
   // Split rows into pages
   const totalRows = rows.length;
@@ -117,12 +119,18 @@ export async function generatePDFReport({
     });
 
     for (let pageIdx = 0; pageIdx < pageChunks.length; pageIdx++) {
+      if (onProgress) {
+        onProgress(pageIdx + 1, pageChunks.length);
+      }
+      // Brief yield so the UI stays responsive and updates progress
+      await new Promise((resolve) => setTimeout(resolve, 15));
+
       const pageRows = pageChunks[pageIdx];
 
       const pageEl = document.createElement('div');
       pageEl.style.width = `${pageWidthPx}px`;
       pageEl.style.height = `${pageHeightPx}px`;
-      pageEl.style.padding = '24px 30px';
+      pageEl.style.padding = '20px 24px';
       pageEl.style.background = '#ffffff';
       pageEl.style.boxSizing = 'border-box';
       pageEl.style.display = 'flex';
@@ -161,7 +169,7 @@ export async function generatePDFReport({
               .map((cell, cIdx) => {
                 const align = getColumnAlignment(headers[cIdx] || '', cell);
                 const borderTop = isTotalRow ? 'border-top: 2px solid #475569;' : '';
-                return `<td style="padding: 5px 8px; border: 1px solid #cbd5e1; text-align: ${align}; font-size: 9.5px; ${borderTop}">${cell ?? '-'}</td>`;
+                return `<td style="padding: 4px 6px; border: 1px solid #cbd5e1; text-align: ${align}; font-size: 9px; ${borderTop}">${cell ?? '-'}</td>`;
               })
               .join('');
 
@@ -235,12 +243,16 @@ export async function generatePDFReport({
         scrollY: 0
       });
 
-      const imgData = canvas.toDataURL('image/jpeg', 0.96);
+      const imgData = canvas.toDataURL('image/jpeg', 0.94);
 
       if (pageIdx > 0) {
         doc.addPage('a4', orientation);
       }
       doc.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
+
+      // Free canvas memory
+      canvas.width = 0;
+      canvas.height = 0;
     }
 
     doc.save(`${filename}_${new Date().toISOString().split('T')[0]}.pdf`);

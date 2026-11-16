@@ -21,7 +21,7 @@ export interface ReportPreviewData {
   rows: (string | number)[][];
   totalRecords?: number;
   sheetName?: string;
-  onDownload: () => void | Promise<void>;
+  onDownload: (onProgress?: (current: number, total: number) => void) => void | Promise<void>;
 }
 
 interface ReportPreviewModalProps {
@@ -35,6 +35,8 @@ export const ReportPreviewModal: React.FC<ReportPreviewModalProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isDownloaded, setIsDownloaded] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [progressText, setProgressText] = useState('');
 
   // Close on Escape key
   useEffect(() => {
@@ -50,6 +52,8 @@ export const ReportPreviewModal: React.FC<ReportPreviewModalProps> = ({
   useEffect(() => {
     setSearchTerm('');
     setIsDownloaded(false);
+    setIsGenerating(false);
+    setProgressText('');
   }, [data]);
 
   if (!data) return null;
@@ -69,16 +73,30 @@ export const ReportPreviewModal: React.FC<ReportPreviewModalProps> = ({
   const previewLimit = 50;
   const displayedRows = filteredRows.slice(0, previewLimit);
 
-  const handleDownload = () => {
-    setIsDownloaded(true);
+  const handleDownload = async () => {
+    if (isGenerating) return;
     try {
-      data.onDownload();
+      setIsGenerating(true);
+      setProgressText('फाइल तैयार हो रही है...');
+      if (data.onDownload) {
+        const result = data.onDownload((current: number, total: number) => {
+          setProgressText(`पृष्ठ ${current} / ${total} (${Math.round((current / total) * 100)}%)`);
+        });
+        if (result && typeof (result as any).then === 'function') {
+          await result;
+        }
+      }
+      setIsDownloaded(true);
+      setTimeout(() => {
+        onClose();
+      }, 1500);
     } catch (err) {
       console.error('Download error:', err);
+      alert('दस्तावेज़ डाउनलोड करने में त्रुटि आई। कृपया पुनः प्रयास करें।');
+    } finally {
+      setIsGenerating(false);
+      setProgressText('');
     }
-    setTimeout(() => {
-      onClose();
-    }, 1200);
   };
 
   return (
@@ -287,15 +305,23 @@ export const ReportPreviewModal: React.FC<ReportPreviewModalProps> = ({
 
             <button
               onClick={handleDownload}
-              className={`flex-1 sm:flex-none text-xs font-bold text-white px-4 py-2 rounded-lg shadow-xs flex items-center justify-center space-x-2 transition-all cursor-pointer ${
-                isDownloaded
-                  ? 'bg-emerald-600'
+              disabled={isGenerating}
+              className={`flex-1 sm:flex-none text-xs font-bold text-white px-4 py-2 rounded-lg shadow-xs flex items-center justify-center space-x-2 transition-all ${
+                isGenerating
+                  ? 'bg-blue-600 opacity-90 cursor-wait'
+                  : isDownloaded
+                  ? 'bg-emerald-600 cursor-pointer'
                   : isExcel
-                  ? 'bg-emerald-700 hover:bg-emerald-800'
-                  : 'bg-blue-700 hover:bg-blue-800'
+                  ? 'bg-emerald-700 hover:bg-emerald-800 cursor-pointer'
+                  : 'bg-blue-700 hover:bg-blue-800 cursor-pointer'
               }`}
             >
-              {isDownloaded ? (
+              {isGenerating ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-blue-200" />
+                  <span>{progressText || 'PDF तैयार हो रहा है...'}</span>
+                </>
+              ) : isDownloaded ? (
                 <>
                   <CheckCircle2 className="w-4 h-4 text-emerald-200 animate-in zoom-in" />
                   <span>डाउनलोड हो गया (Downloaded)</span>
