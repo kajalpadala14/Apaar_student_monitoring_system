@@ -236,6 +236,18 @@ export const ReportsView: React.FC = () => {
   }, [filteredStudents, distinctBlocks]);
 
   // Preview Table Helpers
+  const formatApaarStatus = (status?: string) => {
+    return status === 'YES' ? 'बन गई (YES)' : 'लंबित (Pending)';
+  };
+
+  const formatSurveyStatus = (status?: string) => {
+    if (status === 'SURVEY COMPLETED') return 'सर्वे पूर्ण (Completed)';
+    if (status === 'PENDING') return 'सर्वे लंबित (Pending)';
+    if (status === 'FOLLOW-UP REQUIRED') return 'फॉलो-अप (Follow-up)';
+    if (status === 'RESOLVED') return 'निराकृत (Resolved)';
+    return status || '-';
+  };
+
   const detailedPreviewHeaders = [
     'क्र.',
     'ब्लॉक',
@@ -312,7 +324,18 @@ export const ReportsView: React.FC = () => {
   // Preview & Export Single Reason Student Details (PDF)
   const handlePreviewReasonDetailsPDF = (reasonName: string, blockName: string = '') => {
     const targetStudents = getReasonStudents(reasonName, blockName);
-    const pdfHeaders = ['क्र.', 'ब्लॉक', 'संकुल', 'स्कूल का नाम', 'कक्षा', 'PEN नंबर', 'विद्यार्थी नाम (मार्कशीट)', 'अपार लंबित कारण', 'सर्वे स्थिति'];
+    const pdfHeaders = [
+      'क्र.',
+      'ब्लॉक (Block)',
+      'संकुल (Cluster)',
+      'स्कूल का नाम (School)',
+      'कक्षा',
+      'PEN नंबर',
+      'विद्यार्थी नाम (Student Name)',
+      'अपार लंबित कारण (Pending Reason)',
+      'APAAR स्थिति',
+      'सर्वेक्षण स्थिति'
+    ];
     const pdfRows = targetStudents.slice(0, 200).map((s, idx) => [
       idx + 1,
       s.block_name || '-',
@@ -322,7 +345,8 @@ export const ReportsView: React.FC = () => {
       s.student_pen_number || '-',
       s.student_name_marksheet || '-',
       s.apaar_pending_reason || '-',
-      s.survey_status || '-'
+      formatApaarStatus(s.is_apaar_generated),
+      formatSurveyStatus(s.survey_status)
     ]);
     const scopeLabel = blockName ? `[ब्लॉक: ${blockName}] ` : '';
     const reasonLabel = reasonName ? `कारण: ${reasonName}` : 'सभी कारणों की विस्तृत रिपोर्ट';
@@ -520,8 +544,8 @@ export const ReportsView: React.FC = () => {
   };
 
   const handlePreviewBlockPDF = () => {
-    const headers = ['ब्लॉक का नाम (Block)', 'कुल छात्र (Total)', 'सर्वेक्षण पूर्ण (Completed)', 'सर्वेक्षण लंबित (Pending)', 'फॉलो-अप (Follow-up)', 'निराकृत (Resolved)', 'पूर्णता % (Rate)'];
-    const rows = blockReportData.map((b) => [b.block, b.total, b.completed, b.pending, b.followUp, b.resolved, `${b.completionRate}%`]);
+    const headers = ['क्र.', 'ब्लॉक का नाम (Block)', 'कुल छात्र (Total)', 'सर्वेक्षण पूर्ण (Completed)', 'सर्वेक्षण लंबित (Pending)', 'फॉलो-अप (Follow-up)', 'निराकृत (Resolved)', 'पूर्णता % (Rate)'];
+    const rows = blockReportData.map((b, idx) => [idx + 1, b.block, b.total, b.completed, b.pending, b.followUp, b.resolved, `${b.completionRate}%`]);
     setPreviewData({
       title: 'BLOCK-WISE APAAR PENDING SURVEY REPORT (ब्लॉक-वार अपार सर्वेक्षण रिपोर्ट)',
       format: 'pdf',
@@ -573,8 +597,9 @@ export const ReportsView: React.FC = () => {
   };
 
   const handlePreviewSchoolPDF = () => {
-    const headers = ['School Name', 'UDISE Code', 'Block', 'Total Students', 'Completed', 'Pending', 'Resolved', 'Completion %'];
-    const rows = schoolReportData.map((s) => [
+    const headers = ['क्र.', 'स्कूल का नाम (School)', 'UDISE कोड', 'ब्लॉक (Block)', 'कुल छात्र (Total)', 'सर्वे पूर्ण (Completed)', 'लंबित (Pending)', 'निराकृत (Resolved)', 'पूर्णता % (Rate)'];
+    const rows = schoolReportData.map((s, idx) => [
+      idx + 1,
       s.schoolName,
       s.udise,
       s.block,
@@ -585,7 +610,7 @@ export const ReportsView: React.FC = () => {
       `${s.total > 0 ? ((s.completed + s.resolved) / s.total * 100).toFixed(1) : 0}%`
     ]);
     setPreviewData({
-      title: 'SCHOOL-WISE APAAR PENDING SURVEY REPORT',
+      title: 'SCHOOL-WISE APAAR PENDING SURVEY REPORT (स्कूल-वार सर्वेक्षण रिपोर्ट)',
       format: 'pdf',
       filename: 'Dantewada_School_Wise_Report',
       headers,
@@ -631,10 +656,10 @@ export const ReportsView: React.FC = () => {
   };
 
   const handlePreviewReasonPDF = () => {
-    const headers = ['Pending Reason', 'Student Count', 'Percentage %', 'Completed', 'Follow-up Req.', 'Resolved'];
-    const rows = reasonReportData.map((r) => [r.reason, r.count, `${r.percentage}%`, r.completed, r.followUp, r.resolved]);
+    const headers = ['क्र.', 'अपार लंबित कारण (Pending Reason)', 'छात्र संख्या (Count)', 'प्रतिशत (%)', 'सर्वे पूर्ण (Completed)', 'फॉलो-अप (Follow-up)', 'निराकृत (Resolved)'];
+    const rows = reasonReportData.map((r, idx) => [idx + 1, r.reason, r.count, `${r.percentage}%`, r.completed, r.followUp, r.resolved]);
     setPreviewData({
-      title: 'REASON-WISE APAAR PENDING ANALYSIS REPORT',
+      title: 'REASON-WISE APAAR PENDING ANALYSIS REPORT (कारण-वार विश्लेषण रिपोर्ट)',
       format: 'pdf',
       filename: 'Dantewada_Reason_Wise_Report',
       headers,
@@ -677,16 +702,16 @@ export const ReportsView: React.FC = () => {
 
   const handlePreviewStatusPDF = () => {
     const statusStats = [
-      { status: 'SURVEY COMPLETED', count: filteredStudents.filter((s) => s.survey_status === 'SURVEY COMPLETED').length },
-      { status: 'PENDING', count: filteredStudents.filter((s) => s.survey_status === 'PENDING').length },
-      { status: 'FOLLOW-UP REQUIRED', count: filteredStudents.filter((s) => s.survey_status === 'FOLLOW-UP REQUIRED').length },
-      { status: 'RESOLVED', count: filteredStudents.filter((s) => s.survey_status === 'RESOLVED').length },
+      { status: 'सर्वेक्षण पूर्ण (Survey Completed)', count: filteredStudents.filter((s) => s.survey_status === 'SURVEY COMPLETED').length },
+      { status: 'सर्वेक्षण लंबित (Survey Pending)', count: filteredStudents.filter((s) => s.survey_status === 'PENDING').length },
+      { status: 'फॉलो-अप आवश्यक (Follow-up Required)', count: filteredStudents.filter((s) => s.survey_status === 'FOLLOW-UP REQUIRED').length },
+      { status: 'निराकृत (Resolved)', count: filteredStudents.filter((s) => s.survey_status === 'RESOLVED').length },
     ];
     const total = filteredStudents.length;
-    const headers = ['Survey Status', 'Student Count', 'Percentage %'];
-    const rows = statusStats.map((s) => [s.status, s.count, `${total > 0 ? ((s.count / total) * 100).toFixed(1) : 0}%`]);
+    const headers = ['क्र.', 'सर्वेक्षण स्थिति (Survey Status)', 'विद्यार्थी संख्या (Student Count)', 'प्रतिशत (%)'];
+    const rows = statusStats.map((s, idx) => [idx + 1, s.status, s.count, `${total > 0 ? ((s.count / total) * 100).toFixed(1) : 0}%`]);
     setPreviewData({
-      title: 'SURVEY STATUS SUMMARY REPORT',
+      title: 'SURVEY STATUS SUMMARY REPORT (सर्वेक्षण स्थिति सारांश रिपोर्ट)',
       format: 'pdf',
       filename: 'Dantewada_Survey_Status_Report',
       headers,
@@ -719,26 +744,27 @@ export const ReportsView: React.FC = () => {
 
   const handlePreviewPendingPDF = () => {
     const pendings = filteredStudents.filter((s) => s.survey_status === 'PENDING');
-    const pdfHeaders = ['S.No', 'Block', 'Cluster', 'School Name', 'Student Name', 'PEN', 'Reason', 'Status'];
+    const pdfHeaders = ['क्र.', 'ब्लॉक (Block)', 'संकुल (Cluster)', 'स्कूल (School)', 'कक्षा', 'PEN नंबर', 'विद्यार्थी नाम (Student Name)', 'अपार लंबित कारण', 'सर्वेक्षण स्थिति'];
     const pdfRows = pendings.slice(0, 100).map((s, idx) => [
       idx + 1,
       s.block_name || '-',
       s.sankul_name || '-',
       s.school_name || '-',
-      s.student_name_marksheet || '-',
+      s.class_name || '-',
       s.student_pen_number || '-',
-      s.apaar_pending_reason || '-',
-      s.survey_status || '-'
+      s.student_name_marksheet || '-',
+      s.apaar_pending_reason || 'लंबित (Pending)',
+      '⏳ सर्वे लंबित (Pending)'
     ]);
     setPreviewData({
-      title: 'PENDING SURVEY STUDENTS REPORT (Top 100 Snapshot)',
+      title: `PENDING SURVEY STUDENTS REPORT - लंबित सर्वेक्षण विद्यार्थी (शीर्ष 100 - कुल: ${pendings.length})`,
       format: 'pdf',
       filename: 'Dantewada_Pending_Students_PDF',
       headers: pdfHeaders,
       rows: pdfRows,
       totalRecords: pendings.length,
       onDownload: () => generatePDFReport({
-        title: 'PENDING SURVEY STUDENTS REPORT (Top 100 Snapshot)',
+        title: `PENDING SURVEY STUDENTS REPORT (कुल: ${pendings.length})`,
         filename: 'Dantewada_Pending_Students_PDF',
         headers: pdfHeaders,
         rows: pdfRows
@@ -764,26 +790,28 @@ export const ReportsView: React.FC = () => {
 
   const handlePreviewCompletedPDF = () => {
     const completed = filteredStudents.filter((s) => s.survey_status === 'SURVEY COMPLETED');
-    const pdfHeaders = ['S.No', 'Block', 'Cluster', 'School Name', 'Student Name', 'PEN', 'Reason', 'Status'];
+    const pdfHeaders = ['क्र.', 'ब्लॉक (Block)', 'संकुल (Cluster)', 'स्कूल (School)', 'कक्षा', 'PEN नंबर', 'विद्यार्थी नाम (Student Name)', 'अपार लंबित कारण (Pending Reason)', 'APAAR स्थिति', 'सर्वे स्थिति'];
     const pdfRows = completed.slice(0, 100).map((s, idx) => [
       idx + 1,
       s.block_name || '-',
       s.sankul_name || '-',
       s.school_name || '-',
-      s.student_name_marksheet || '-',
+      s.class_name || '-',
       s.student_pen_number || '-',
-      s.apaar_pending_reason || '-',
-      s.survey_status || '-'
+      s.student_name_marksheet || '-',
+      s.apaar_pending_reason || 'कारण दर्ज नहीं',
+      formatApaarStatus(s.is_apaar_generated),
+      '✓ सर्वे पूर्ण (Completed)'
     ]);
     setPreviewData({
-      title: 'COMPLETED SURVEY STUDENTS REPORT (Top 100 Snapshot)',
+      title: `COMPLETED SURVEY STUDENTS REPORT - पूर्ण सर्वेक्षण विद्यार्थी (शीर्ष 100 - कुल: ${completed.length})`,
       format: 'pdf',
       filename: 'Dantewada_Completed_Survey_PDF',
       headers: pdfHeaders,
       rows: pdfRows,
       totalRecords: completed.length,
       onDownload: () => generatePDFReport({
-        title: 'COMPLETED SURVEY STUDENTS REPORT (Top 100 Snapshot)',
+        title: `COMPLETED SURVEY STUDENTS REPORT (कुल: ${completed.length})`,
         filename: 'Dantewada_Completed_Survey_PDF',
         headers: pdfHeaders,
         rows: pdfRows
@@ -809,26 +837,26 @@ export const ReportsView: React.FC = () => {
 
   const handlePreviewApaarGeneratedPDF = () => {
     const apaarStudents = filteredStudents.filter((s) => s.is_apaar_generated === 'YES');
-    const pdfHeaders = ['S.No', 'Block', 'Cluster', 'School Name', 'Class', 'Student Name', 'PEN', 'APAAR Status'];
+    const pdfHeaders = ['क्र.', 'ब्लॉक (Block)', 'संकुल (Cluster)', 'स्कूल (School)', 'कक्षा', 'PEN नंबर', 'विद्यार्थी नाम (Student Name)', 'APAAR स्थिति'];
     const pdfRows = apaarStudents.slice(0, 100).map((s, idx) => [
       idx + 1,
       s.block_name || '-',
       s.sankul_name || '-',
       s.school_name || '-',
       s.class_name || '-',
-      s.student_name_marksheet || '-',
       s.student_pen_number || '-',
-      'YES (बन गई)'
+      s.student_name_marksheet || '-',
+      '✓ बन गई (YES)'
     ]);
     setPreviewData({
-      title: `APAAR ID GENERATED STUDENTS REPORT (Top 100 Snapshot - Total: ${apaarStudents.length})`,
+      title: `APAAR ID GENERATED STUDENTS REPORT - बन गई (शीर्ष 100 - कुल: ${apaarStudents.length})`,
       format: 'pdf',
       filename: 'Dantewada_APAAR_Generated_Students_PDF',
       headers: pdfHeaders,
       rows: pdfRows,
       totalRecords: apaarStudents.length,
       onDownload: () => generatePDFReport({
-        title: `APAAR ID GENERATED STUDENTS REPORT (Total: ${apaarStudents.length})`,
+        title: `APAAR ID GENERATED STUDENTS REPORT (कुल: ${apaarStudents.length})`,
         filename: 'Dantewada_APAAR_Generated_Students_PDF',
         headers: pdfHeaders,
         rows: pdfRows
@@ -852,27 +880,28 @@ export const ReportsView: React.FC = () => {
   };
 
   const handlePreviewDetailedPDF = () => {
-    const pdfHeaders = ['S.No', 'Block', 'Cluster Name', 'School Name', 'Student Name', 'PEN', 'Reason', 'Aadhaar Provided', 'Status'];
+    const pdfHeaders = ['क्र.', 'ब्लॉक (Block)', 'संकुल (Cluster)', 'स्कूल (School)', 'कक्षा', 'PEN नंबर', 'विद्यार्थी नाम (Student Name)', 'अपार लंबित कारण (Pending Reason)', 'APAAR स्थिति', 'सर्वे स्थिति'];
     const pdfRows = filteredStudents.slice(0, 100).map((s, idx) => [
       idx + 1,
       s.block_name || '-',
       s.sankul_name || '-',
       s.school_name || '-',
-      s.student_name_marksheet || '-',
+      s.class_name || '-',
       s.student_pen_number || '-',
+      s.student_name_marksheet || '-',
       s.apaar_pending_reason || '-',
-      s.is_aadhaar_provided || '-',
-      s.survey_status || '-'
+      formatApaarStatus(s.is_apaar_generated),
+      formatSurveyStatus(s.survey_status)
     ]);
     setPreviewData({
-      title: 'DETAILED STUDENT SURVEY MASTER REPORT (Top 100 Snapshot)',
+      title: `DETAILED STUDENT SURVEY MASTER REPORT - विस्तृत मास्टर रिपोर्ट (शीर्ष 100 - कुल: ${filteredStudents.length})`,
       filename: 'Dantewada_Student_Survey_Master',
       format: 'pdf',
       headers: pdfHeaders,
       rows: pdfRows,
       totalRecords: filteredStudents.length,
       onDownload: () => generatePDFReport({
-        title: 'DETAILED STUDENT SURVEY MASTER REPORT (Top 100 Snapshot)',
+        title: `DETAILED STUDENT SURVEY MASTER REPORT (कुल: ${filteredStudents.length})`,
         filename: 'Dantewada_Student_Survey_Master',
         headers: pdfHeaders,
         rows: pdfRows
