@@ -7,7 +7,10 @@ import {
   Eye,
   Search,
   CheckCircle2,
+  Printer,
+  Loader2,
 } from 'lucide-react';
+import { printHTMLReport } from '../../lib/pdf';
 
 export interface ReportPreviewData {
   title: string;
@@ -18,7 +21,7 @@ export interface ReportPreviewData {
   rows: (string | number)[][];
   totalRecords?: number;
   sheetName?: string;
-  onDownload: () => void;
+  onDownload: () => void | Promise<void>;
 }
 
 interface ReportPreviewModalProps {
@@ -67,11 +70,15 @@ export const ReportPreviewModal: React.FC<ReportPreviewModalProps> = ({
   const displayedRows = filteredRows.slice(0, previewLimit);
 
   const handleDownload = () => {
-    data.onDownload();
     setIsDownloaded(true);
+    try {
+      data.onDownload();
+    } catch (err) {
+      console.error('Download error:', err);
+    }
     setTimeout(() => {
       onClose();
-    }, 900);
+    }, 1200);
   };
 
   return (
@@ -251,6 +258,26 @@ export const ReportPreviewModal: React.FC<ReportPreviewModalProps> = ({
           </div>
 
           <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
+            {!isExcel && (
+              <button
+                onClick={() => {
+                  printHTMLReport({
+                    title: data.title,
+                    subtitle: data.subtitle,
+                    filename: data.filename,
+                    headers: data.headers,
+                    rows: data.rows,
+                    orientation: 'landscape'
+                  });
+                }}
+                className="text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 px-3 py-2 rounded-lg flex items-center space-x-1.5 cursor-pointer transition-colors"
+                title="ब्राउज़र प्रिंट या Save as PDF डायलॉग खोलें"
+              >
+                <Printer className="w-4 h-4 text-slate-600" />
+                <span>प्रिंट / सेव PDF</span>
+              </button>
+            )}
+
             <button
               onClick={onClose}
               className="flex-1 sm:flex-none text-xs font-semibold text-slate-600 hover:text-slate-800 px-3.5 py-2 border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer text-center"

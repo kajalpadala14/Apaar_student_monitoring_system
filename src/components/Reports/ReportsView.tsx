@@ -312,8 +312,8 @@ export const ReportsView: React.FC = () => {
   // Preview & Export Single Reason Student Details (PDF)
   const handlePreviewReasonDetailsPDF = (reasonName: string, blockName: string = '') => {
     const targetStudents = getReasonStudents(reasonName, blockName);
-    const pdfHeaders = ['क्र.', 'ब्लॉक', 'संकुल', 'स्कूल', 'कक्षा', 'PEN', 'विद्यार्थी नाम', 'कारण', 'स्थिति'];
-    const pdfRows = targetStudents.slice(0, 100).map((s, idx) => [
+    const pdfHeaders = ['क्र.', 'ब्लॉक', 'संकुल', 'स्कूल का नाम', 'कक्षा', 'PEN नंबर', 'विद्यार्थी नाम (मार्कशीट)', 'अपार लंबित कारण', 'सर्वे स्थिति'];
+    const pdfRows = targetStudents.slice(0, 200).map((s, idx) => [
       idx + 1,
       s.block_name || '-',
       s.sankul_name || '-',
@@ -324,8 +324,8 @@ export const ReportsView: React.FC = () => {
       s.apaar_pending_reason || '-',
       s.survey_status || '-'
     ]);
-    const scopeLabel = blockName ? `[${blockName}] ` : '';
-    const reasonLabel = reasonName ? `कारण: ${reasonName}` : 'ALL REASONS DETAILED SNAPSHOT';
+    const scopeLabel = blockName ? `[ब्लॉक: ${blockName}] ` : '';
+    const reasonLabel = reasonName ? `कारण: ${reasonName}` : 'सभी कारणों की विस्तृत रिपोर्ट';
     const safeTitle = `${scopeLabel}${reasonLabel}`;
     
     let safeFilename = 'APAAR';
@@ -336,7 +336,7 @@ export const ReportsView: React.FC = () => {
 
     setPreviewData({
       title: `${safeTitle} (${targetStudents.length.toLocaleString('en-IN')} छात्र)`,
-      subtitle: `Dantewada APAAR Student Pending Reason Report${blockName ? ` - Block: ${blockName}` : ''}`,
+      subtitle: `कार्यालय कलेक्टर एवं जिला मिशन संचालक, समग्र शिक्षा, जिला-दंतेवाड़ा (छ.ग.)`,
       format: 'pdf',
       filename: safeFilename,
       headers: pdfHeaders,
@@ -344,7 +344,7 @@ export const ReportsView: React.FC = () => {
       totalRecords: targetStudents.length,
       onDownload: () => generatePDFReport({
         title: safeTitle,
-        subtitle: `Dantewada APAAR Student Pending Reason Report${blockName ? ` - Block: ${blockName}` : ''} (${targetStudents.length} छात्र)`,
+        subtitle: `कार्यालय कलेक्टर एवं जिला मिशन संचालक, समग्र शिक्षा, जिला-दंतेवाड़ा (छ.ग.)`,
         filename: safeFilename,
         headers: pdfHeaders,
         rows: pdfRows
@@ -452,7 +452,7 @@ export const ReportsView: React.FC = () => {
   // Preview & Export Block-wise Reason Matrix (PDF)
   const handlePreviewBlockReasonMatrixPDF = () => {
     const { rows, distinctBlocks, blockTotals, totalCount } = blockReasonMatrix;
-    const pdfHeaders = ['क्र.', 'लंबित कारण', ...distinctBlocks.map((b) => b.slice(0, 9)), 'कुल', '%'];
+    const pdfHeaders = ['क्र.', 'लंबित कारण (Pending Reason)', ...distinctBlocks, 'कुल छात्र (Total)', 'प्रतिशत (%)'];
     const pdfRows = rows.map((r, idx) => [
       idx + 1,
       r.reason,
@@ -462,15 +462,15 @@ export const ReportsView: React.FC = () => {
     ]);
     pdfRows.push([
       '',
-      'कुल योग',
+      'कुल योग (Grand Total)',
       ...distinctBlocks.map((b) => blockTotals[b] || 0),
       totalCount,
       '100%'
     ]);
 
     setPreviewData({
-      title: 'BLOCK-WISE APAAR PENDING REASON REPORT',
-      subtitle: `District Dantewada - Pending Reasons across Blocks (Total: ${totalCount} छात्र)`,
+      title: 'BLOCK-WISE APAAR PENDING REASON REPORT (ब्लॉक-वार कारण विश्लेषण रिपोर्ट)',
+      subtitle: `समग्र शिक्षा, जिला-दंतेवाड़ा (छ.ग.) - सभी 4 ब्लॉकों में अपार लंबित कारणों की तुलना (कुल: ${totalCount} छात्र)`,
       format: 'pdf',
       filename: 'Dantewada_Block_Wise_Reason_Report_PDF',
       headers: pdfHeaders,
@@ -478,7 +478,7 @@ export const ReportsView: React.FC = () => {
       totalRecords: rows.length,
       onDownload: () => generatePDFReport({
         title: 'BLOCK-WISE APAAR PENDING REASON REPORT',
-        subtitle: `District Dantewada - Pending Reasons across Blocks (Total: ${totalCount} छात्र)`,
+        subtitle: `समग्र शिक्षा, जिला-दंतेवाड़ा (छ.ग.) - ब्लॉक-वार कारण तुलना (कुल: ${totalCount} छात्र)`,
         filename: 'Dantewada_Block_Wise_Reason_Report_PDF',
         headers: pdfHeaders,
         rows: pdfRows
@@ -520,10 +520,10 @@ export const ReportsView: React.FC = () => {
   };
 
   const handlePreviewBlockPDF = () => {
-    const headers = ['Block', 'Total Students', 'Survey Completed', 'Survey Pending', 'Follow-up Req.', 'Resolved', 'Completion %'];
+    const headers = ['ब्लॉक का नाम (Block)', 'कुल छात्र (Total)', 'सर्वेक्षण पूर्ण (Completed)', 'सर्वेक्षण लंबित (Pending)', 'फॉलो-अप (Follow-up)', 'निराकृत (Resolved)', 'पूर्णता % (Rate)'];
     const rows = blockReportData.map((b) => [b.block, b.total, b.completed, b.pending, b.followUp, b.resolved, `${b.completionRate}%`]);
     setPreviewData({
-      title: 'BLOCK-WISE APAAR PENDING SURVEY REPORT',
+      title: 'BLOCK-WISE APAAR PENDING SURVEY REPORT (ब्लॉक-वार अपार सर्वेक्षण रिपोर्ट)',
       format: 'pdf',
       filename: 'Dantewada_Block_Wise_Report',
       headers,
