@@ -84,3 +84,47 @@ export function exportReasonWiseMultiSheetReport(
 
   XLSX.writeFile(wb, `${filenamePrefix}_${new Date().toISOString().split('T')[0]}.xlsx`);
 }
+
+/**
+ * Export block-wise reason cross-tabulation matrix report
+ */
+export function exportBlockWiseReasonMatrixReport(
+  matrixRows: any[],
+  filenamePrefix: string = 'Dantewada_Block_Wise_Reason_Report'
+) {
+  const ws = XLSX.utils.json_to_sheet(matrixRows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Block_Reason_Matrix');
+  XLSX.writeFile(wb, `${filenamePrefix}_${new Date().toISOString().split('T')[0]}.xlsx`);
+}
+
+/**
+ * Export multi-sheet workbook where each sheet is a Block containing its students
+ */
+export function exportBlockWiseMultiSheetReport(
+  blockGroups: { block: string; students: Student[] }[],
+  summaryRows: any[] = [],
+  filenamePrefix: string = 'Dantewada_Block_Wise_Full_Report'
+) {
+  const wb = XLSX.utils.book_new();
+
+  // 1. Summary Matrix Sheet
+  if (summaryRows.length > 0) {
+    const summaryWs = XLSX.utils.json_to_sheet(summaryRows);
+    XLSX.utils.book_append_sheet(wb, summaryWs, 'Matrix_Summary');
+  }
+
+  // 2. Individual Sheet for each Block
+  blockGroups.forEach((group, index) => {
+    const rows = group.students.map((s, idx) => formatStudentDetailedRow(s, idx));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    let cleanName = group.block.replace(/[:\\/?*\[\]]/g, ' ').trim();
+    if (cleanName.length > 25) {
+      cleanName = cleanName.slice(0, 25);
+    }
+    const finalSheetName = cleanName || `Block_${index + 1}`;
+    XLSX.utils.book_append_sheet(wb, ws, finalSheetName);
+  });
+
+  XLSX.writeFile(wb, `${filenamePrefix}_${new Date().toISOString().split('T')[0]}.xlsx`);
+}

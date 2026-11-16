@@ -1,7 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { useStudents } from '../../context/StudentContext';
 import { Student } from '../../types/student';
-import { exportToExcel, exportStudentDetailedReport, exportReasonWiseMultiSheetReport } from '../../lib/excel';
+import {
+  exportToExcel,
+  exportStudentDetailedReport,
+  exportReasonWiseMultiSheetReport,
+  exportBlockWiseReasonMatrixReport,
+  exportBlockWiseMultiSheetReport,
+} from '../../lib/excel';
 import { generatePDFReport } from '../../lib/pdf';
 import {
   FileSpreadsheet,
@@ -16,7 +22,8 @@ import {
   Eye,
   ArrowUpRight,
   Layers,
-  ListFilter
+  ListFilter,
+  TableProperties
 } from 'lucide-react';
 import { SURVEY_REASONS, SURVEY_STATUS_OPTIONS } from '../../types/student';
 import { ReportPreviewModal, ReportPreviewData } from './ReportPreviewModal';
@@ -24,11 +31,12 @@ import { ReportPreviewModal, ReportPreviewData } from './ReportPreviewModal';
 export const ReportsView: React.FC = () => {
   const { students, filteredStudents, activeFilters, setActiveFilters, resetFilters, currentUser, setActiveTab } = useStudents();
   const isSchoolUser = currentUser?.role === 'SCHOOL_USER';
-  const [selectedReportView, setSelectedReportView] = useState<'block' | 'school' | 'reason' | 'detailed'>(
+  const [selectedReportView, setSelectedReportView] = useState<'block' | 'school' | 'reason' | 'block_reason' | 'detailed'>(
     currentUser?.role === 'SCHOOL_USER' ? 'school' : 'block'
   );
   const [previewData, setPreviewData] = useState<ReportPreviewData | null>(null);
   const [selectedDetailedReason, setSelectedDetailedReason] = useState<string>('');
+  const [selectedDetailedBlock, setSelectedDetailedBlock] = useState<string>('');
 
   // Dynamic filter options
   const availableReasons = useMemo(() => {
@@ -165,6 +173,68 @@ export const ReportsView: React.FC = () => {
       .sort((a, b) => b.count - a.count);
   }, [filteredStudents]);
 
+  // 3B. Block × Reason Matrix Data
+  const distinctBlocks = useMemo(() => {
+    const list = ['DANTEWADA', 'GEEDAM', 'KUAKONDA', 'KATEKALYAN'];
+    const set = new Set<string>(list);
+    students.forEach((s) => {
+      if (s.block_name && s.block_name.trim()) set.add(s.block_name.toUpperCase().trim());
+    });
+    return Array.from(set).sort((a, b) => {
+      const idxA = list.indexOf(a);
+      const idxB = list.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.localeCompare(b);
+    });
+  }, [students]);
+
+  const blockReasonMatrix = useMemo(() => {
+    const matrixMap = new Map<string, Record<string, number>>();
+    const blockTotals: Record<string, number> = {};
+    distinctBlocks.forEach((b) => { blockTotals[b] = 0; });
+    let totalCount = 0;
+
+    filteredStudents.forEach((s) => {
+      if (s.apaar_pending_reason && s.apaar_pending_reason.trim()) {
+        const r = s.apaar_pending_reason.trim();
+        const b = (s.block_name || '').toUpperCase().trim();
+        if (!matrixMap.has(r)) {
+          const init: Record<string, number> = {};
+          distinctBlocks.forEach((blk) => { init[blk] = 0; });
+          matrixMap.set(r, init);
+        }
+        const counts = matrixMap.get(r)!;
+        if (b in counts) {
+          counts[b]++;
+        } else {
+          counts[b] = 1;
+        }
+        blockTotals[b] = (blockTotals[b] || 0) + 1;
+        totalCount++;
+      }
+    });
+
+    const rows = Array.from(matrixMap.entries()).map(([reason, counts]) => {
+      const rowTotal = Object.values(counts).reduce((sum, val) => sum + val, 0);
+      const percentage = totalCount > 0 ? ((rowTotal / totalCount) * 100).toFixed(1) : '0';
+      return {
+        reason,
+        counts,
+        total: rowTotal,
+        percentage
+      };
+    }).sort((a, b) => b.total - a.total);
+
+    return {
+      rows,
+      distinctBlocks,
+      blockTotals,
+      totalCount
+    };
+  }, [filteredStudents, distinctBlocks]);
+
   // Preview Table Helpers
   const detailedPreviewHeaders = [
     'क्र.',
@@ -204,25 +274,34 @@ export const ReportsView: React.FC = () => {
     s.surveyor_name || '-'
   ];
 
-  // Helper to fetch students for a particular reason
-  const getReasonStudents = (reasonName: string) => {
-    return filteredStudents.filter((s) => s.apaar_pending_reason?.trim() === reasonName.trim());
+  // Helper to fetch students for a particular reason and optional block
+  const getReasonStudents = (reasonName: string, blockName: string = '') => {
+    return filteredStudents.filter((s) => {
+      if (reasonName && s.apaar_pending_reason?.trim() !== reasonName.trim()) return false;
+      if (blockName && (s.block_name || '').toUpperCase().trim() !== blockName.toUpperCase().trim()) return false;
+      return !!s.apaar_pending_reason;
+    });
   };
 
   // Preview & Export Single Reason Student Details (Excel)
-  const handlePreviewReasonDetailsExcel = (reasonName: string) => {
-    const targetStudents = reasonName ? getReasonStudents(reasonName) : filteredStudents.filter(s => !!s.apaar_pending_reason);
+  const handlePreviewReasonDetailsExcel = (reasonName: string, blockName: string = '') => {
+    const targetStudents = getReasonStudents(reasonName, blockName);
     const rows = targetStudents.map(studentToPreviewRow);
-    const safeTitle = reasonName ? `कारण-वार विस्तृत छात्र रिपोर्ट: ${reasonName}` : 'All Reasons Detailed Students Report';
-    const safeFilename = reasonName
-      ? `APAAR_Reason_${reasonName.replace(/[:\\/?*\[\]\s]/g, '_').slice(0, 25)}_Students`
-      : 'APAAR_All_Reasons_Detailed_Students';
+    const scopeLabel = blockName ? `ब्लॉक: ${blockName}` : '';
+    const reasonLabel = reasonName ? `कारण: ${reasonName}` : 'सभी कारण (All Reasons)';
+    const safeTitle = scopeLabel ? `कारण-वार विस्तृत छात्र रिपोर्ट (${scopeLabel} - ${reasonLabel})` : `कारण-वार विस्तृत छात्र रिपोर्ट: ${reasonLabel}`;
+    
+    let safeFilename = 'APAAR';
+    if (blockName) safeFilename += `_${blockName.replace(/[:\\/?*\[\]\s]/g, '_')}`;
+    if (reasonName) safeFilename += `_Reason_${reasonName.replace(/[:\\/?*\[\]\s]/g, '_').slice(0, 20)}`;
+    else safeFilename += '_All_Reasons';
+    safeFilename += '_Students';
 
     setPreviewData({
       title: `${safeTitle} (${targetStudents.length.toLocaleString('en-IN')} छात्र)`,
       format: 'excel',
       filename: safeFilename,
-      sheetName: 'Reason_Students',
+      sheetName: blockName ? `${blockName.slice(0, 15)}_Students` : 'Reason_Students',
       headers: detailedPreviewHeaders,
       rows,
       totalRecords: targetStudents.length,
@@ -231,8 +310,8 @@ export const ReportsView: React.FC = () => {
   };
 
   // Preview & Export Single Reason Student Details (PDF)
-  const handlePreviewReasonDetailsPDF = (reasonName: string) => {
-    const targetStudents = reasonName ? getReasonStudents(reasonName) : filteredStudents.filter(s => !!s.apaar_pending_reason);
+  const handlePreviewReasonDetailsPDF = (reasonName: string, blockName: string = '') => {
+    const targetStudents = getReasonStudents(reasonName, blockName);
     const pdfHeaders = ['क्र.', 'ब्लॉक', 'संकुल', 'स्कूल', 'कक्षा', 'PEN', 'विद्यार्थी नाम', 'कारण', 'स्थिति'];
     const pdfRows = targetStudents.slice(0, 100).map((s, idx) => [
       idx + 1,
@@ -245,14 +324,19 @@ export const ReportsView: React.FC = () => {
       s.apaar_pending_reason || '-',
       s.survey_status || '-'
     ]);
-    const safeTitle = reasonName ? `कारण: ${reasonName}` : 'ALL REASONS DETAILED SNAPSHOT';
-    const safeFilename = reasonName
-      ? `APAAR_Reason_${reasonName.replace(/[:\\/?*\[\]\s]/g, '_').slice(0, 25)}_PDF`
-      : 'APAAR_All_Reasons_Students_PDF';
+    const scopeLabel = blockName ? `[${blockName}] ` : '';
+    const reasonLabel = reasonName ? `कारण: ${reasonName}` : 'ALL REASONS DETAILED SNAPSHOT';
+    const safeTitle = `${scopeLabel}${reasonLabel}`;
+    
+    let safeFilename = 'APAAR';
+    if (blockName) safeFilename += `_${blockName.replace(/[:\\/?*\[\]\s]/g, '_')}`;
+    if (reasonName) safeFilename += `_Reason_${reasonName.replace(/[:\\/?*\[\]\s]/g, '_').slice(0, 20)}`;
+    else safeFilename += '_All_Reasons';
+    safeFilename += '_PDF';
 
     setPreviewData({
       title: `${safeTitle} (${targetStudents.length.toLocaleString('en-IN')} छात्र)`,
-      subtitle: `Dantewada APAAR Student Pending Reason Report`,
+      subtitle: `Dantewada APAAR Student Pending Reason Report${blockName ? ` - Block: ${blockName}` : ''}`,
       format: 'pdf',
       filename: safeFilename,
       headers: pdfHeaders,
@@ -260,7 +344,7 @@ export const ReportsView: React.FC = () => {
       totalRecords: targetStudents.length,
       onDownload: () => generatePDFReport({
         title: safeTitle,
-        subtitle: `Dantewada APAAR Student Pending Reason Report (${targetStudents.length} छात्र)`,
+        subtitle: `Dantewada APAAR Student Pending Reason Report${blockName ? ` - Block: ${blockName}` : ''} (${targetStudents.length} छात्र)`,
         filename: safeFilename,
         headers: pdfHeaders,
         rows: pdfRows
@@ -285,9 +369,130 @@ export const ReportsView: React.FC = () => {
     exportReasonWiseMultiSheetReport(reasonGroups, summaryRows, 'Dantewada_Reason_Wise_All_Students');
   };
 
-  // Navigate to Students list filtered by reason
-  const handleNavigateToReasonStudents = (reasonName: string) => {
-    setActiveFilters((prev) => ({ ...prev, reason: reasonName }));
+  // Export Multi-Sheet Excel by Block
+  const handleExportBlockWiseMultiSheet = () => {
+    const { rows, distinctBlocks, blockTotals, totalCount } = blockReasonMatrix;
+    const summaryRows = rows.map((r, idx) => {
+      const obj: Record<string, any> = {
+        'क्र.': idx + 1,
+        'Pending Reason': r.reason,
+      };
+      distinctBlocks.forEach((b) => {
+        obj[b] = r.counts[b] || 0;
+      });
+      obj['Total'] = r.total;
+      obj['Percentage'] = `${r.percentage}%`;
+      return obj;
+    });
+
+    const blockGroups = distinctBlocks.map((b) => ({
+      block: b,
+      students: filteredStudents.filter((s) => (s.block_name || '').toUpperCase().trim() === b && !!s.apaar_pending_reason)
+    }));
+
+    exportBlockWiseMultiSheetReport(blockGroups, summaryRows, 'Dantewada_Block_Wise_Reason_Students');
+  };
+
+  // Preview & Export Block-wise Reason Matrix (Excel)
+  const handlePreviewBlockReasonMatrixExcel = () => {
+    const { rows, distinctBlocks, blockTotals, totalCount } = blockReasonMatrix;
+    const excelRows = rows.map((r, idx) => {
+      const obj: Record<string, any> = {
+        'क्र. (S.No.)': idx + 1,
+        'लंबित कारण (Pending Reason)': r.reason,
+      };
+      distinctBlocks.forEach((b) => {
+        obj[b] = r.counts[b] || 0;
+      });
+      obj['कुल योग (Total)'] = r.total;
+      obj['प्रतिशत (%)'] = `${r.percentage}%`;
+      return obj;
+    });
+
+    const totalRow: Record<string, any> = {
+      'क्र. (S.No.)': '',
+      'लंबित कारण (Pending Reason)': 'कुल योग (Grand Total)',
+    };
+    distinctBlocks.forEach((b) => {
+      totalRow[b] = blockTotals[b] || 0;
+    });
+    totalRow['कुल योग (Total)'] = totalCount;
+    totalRow['प्रतिशत (%)'] = '100%';
+    excelRows.push(totalRow);
+
+    const headers = ['क्र.', 'लंबित कारण (Pending Reason)', ...distinctBlocks, 'कुल योग (Total)', 'प्रतिशत (%)'];
+    const previewRows = rows.map((r, idx) => [
+      idx + 1,
+      r.reason,
+      ...distinctBlocks.map((b) => r.counts[b] || 0),
+      r.total,
+      `${r.percentage}%`
+    ]);
+    previewRows.push([
+      '',
+      'कुल योग (Grand Total)',
+      ...distinctBlocks.map((b) => blockTotals[b] || 0),
+      totalCount,
+      '100%'
+    ]);
+
+    setPreviewData({
+      title: `Block-wise Reason Analysis Matrix (ब्लॉक-वार कारण विश्लेषण) - ${totalCount.toLocaleString('en-IN')} छात्र`,
+      subtitle: 'District Dantewada - Reason Breakdown across Blocks',
+      format: 'excel',
+      filename: 'Dantewada_Block_Wise_Reason_Matrix',
+      sheetName: 'Block_Reason_Matrix',
+      headers,
+      rows: previewRows,
+      totalRecords: rows.length,
+      onDownload: () => exportBlockWiseReasonMatrixReport(excelRows, 'Dantewada_Block_Wise_Reason_Matrix')
+    });
+  };
+
+  // Preview & Export Block-wise Reason Matrix (PDF)
+  const handlePreviewBlockReasonMatrixPDF = () => {
+    const { rows, distinctBlocks, blockTotals, totalCount } = blockReasonMatrix;
+    const pdfHeaders = ['क्र.', 'लंबित कारण', ...distinctBlocks.map((b) => b.slice(0, 9)), 'कुल', '%'];
+    const pdfRows = rows.map((r, idx) => [
+      idx + 1,
+      r.reason,
+      ...distinctBlocks.map((b) => r.counts[b] || 0),
+      r.total,
+      `${r.percentage}%`
+    ]);
+    pdfRows.push([
+      '',
+      'कुल योग',
+      ...distinctBlocks.map((b) => blockTotals[b] || 0),
+      totalCount,
+      '100%'
+    ]);
+
+    setPreviewData({
+      title: 'BLOCK-WISE APAAR PENDING REASON REPORT',
+      subtitle: `District Dantewada - Pending Reasons across Blocks (Total: ${totalCount} छात्र)`,
+      format: 'pdf',
+      filename: 'Dantewada_Block_Wise_Reason_Report_PDF',
+      headers: pdfHeaders,
+      rows: pdfRows,
+      totalRecords: rows.length,
+      onDownload: () => generatePDFReport({
+        title: 'BLOCK-WISE APAAR PENDING REASON REPORT',
+        subtitle: `District Dantewada - Pending Reasons across Blocks (Total: ${totalCount} छात्र)`,
+        filename: 'Dantewada_Block_Wise_Reason_Report_PDF',
+        headers: pdfHeaders,
+        rows: pdfRows
+      })
+    });
+  };
+
+  // Navigate to Students list filtered by reason & optional block
+  const handleNavigateToReasonStudents = (reasonName: string, blockName: string = '') => {
+    setActiveFilters((prev) => ({
+      ...prev,
+      reason: reasonName,
+      block: blockName || prev.block,
+    }));
     setActiveTab('students');
   };
 
@@ -913,68 +1118,169 @@ export const ReportsView: React.FC = () => {
                 Reason Student Details (विस्तृत)
               </span>
               <span className="text-[11px] font-bold text-amber-900 tabular-nums">
-                {selectedDetailedReason
-                  ? `${getReasonStudents(selectedDetailedReason).length} छात्र`
-                  : `${filteredStudents.filter((s) => !!s.apaar_pending_reason).length} छात्र`}
+                {selectedDetailedBlock ? `${selectedDetailedBlock}: ` : ''}
+                {getReasonStudents(selectedDetailedReason, selectedDetailedBlock).length} छात्र
               </span>
             </div>
             <h3 className="text-sm font-bold text-slate-900 mt-2">
               Reason-wise Detailed Report
             </h3>
             <p className="text-xs text-slate-500 mt-1">
-              किसी भी विशिष्ट कारण के सभी छात्रों की विस्तृत सूची (PEN, नाम, स्कूल, कक्षा, आदि) डाउनलोड करें।
+              किसी भी विशिष्ट कारण व ब्लॉक के छात्रों की विस्तृत सूची (PEN, नाम, स्कूल, कक्षा, आदि) डाउनलोड करें।
             </p>
 
-            {/* Select Reason */}
-            <div className="mt-2.5">
-              <label className="text-[10px] font-semibold text-slate-600 block mb-1">
-                विशिष्ट कारण चुनें (Select Reason):
-              </label>
-              <select
-                value={selectedDetailedReason}
-                onChange={(e) => setSelectedDetailedReason(e.target.value)}
-                className="w-full bg-white border border-amber-300 rounded p-1.5 text-xs text-slate-800 truncate focus:outline-hidden focus:ring-1 focus:ring-amber-500 font-medium"
-              >
-                <option value="">-- सभी कारण (All Reasons) --</option>
-                {reasonReportData.map((r) => (
-                  <option key={r.reason} value={r.reason}>
-                    {r.reason} ({r.count} छात्र)
-                  </option>
-                ))}
-              </select>
+            {/* Select Block & Reason */}
+            <div className="mt-2.5 space-y-2">
+              <div>
+                <label className="text-[10px] font-semibold text-slate-600 block mb-0.5">
+                  ब्लॉक चुनें (Select Block):
+                </label>
+                <select
+                  value={selectedDetailedBlock}
+                  disabled={isSchoolUser}
+                  onChange={(e) => setSelectedDetailedBlock(e.target.value)}
+                  className={`w-full border rounded p-1.5 text-xs truncate font-medium ${
+                    isSchoolUser
+                      ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed'
+                      : 'bg-white border-amber-300 text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-amber-500'
+                  }`}
+                >
+                  <option value="">-- सभी ब्लॉक (All Blocks) --</option>
+                  {blocks.map((b) => (
+                    <option key={b} value={b}>
+                      {b}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-semibold text-slate-600 block mb-0.5">
+                  विशिष्ट कारण चुनें (Select Reason):
+                </label>
+                <select
+                  value={selectedDetailedReason}
+                  onChange={(e) => setSelectedDetailedReason(e.target.value)}
+                  className="w-full bg-white border border-amber-300 rounded p-1.5 text-xs text-slate-800 truncate focus:outline-hidden focus:ring-1 focus:ring-amber-500 font-medium"
+                >
+                  <option value="">-- सभी कारण (All Reasons) --</option>
+                  {reasonReportData.map((r) => {
+                    const blockCount = selectedDetailedBlock
+                      ? getReasonStudents(r.reason, selectedDetailedBlock).length
+                      : r.count;
+                    return (
+                      <option key={r.reason} value={r.reason}>
+                        {r.reason} ({blockCount} छात्र)
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
             </div>
           </div>
 
           <div className="mt-3 pt-3 border-t border-amber-100 space-y-2">
             <div className="flex items-center space-x-2">
               <button
-                onClick={() => handlePreviewReasonDetailsExcel(selectedDetailedReason)}
+                onClick={() => handlePreviewReasonDetailsExcel(selectedDetailedReason, selectedDetailedBlock)}
                 className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold py-1.5 px-2 rounded flex items-center justify-center space-x-1 cursor-pointer shadow-2xs transition-colors"
-                title="चयनित कारण के छात्रों की विस्तृत एक्सेल रिपोर्ट डाउनलोड/प्रिव्यू करें"
+                title="चयनित ब्लॉक व कारण के छात्रों की विस्तृत एक्सेल रिपोर्ट डाउनलोड/प्रिव्यू करें"
               >
                 <FileSpreadsheet className="w-3.5 h-3.5" />
                 <span>Excel विवरण</span>
               </button>
               <button
-                onClick={() => handlePreviewReasonDetailsPDF(selectedDetailedReason)}
+                onClick={() => handlePreviewReasonDetailsPDF(selectedDetailedReason, selectedDetailedBlock)}
                 className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-1.5 px-2 rounded flex items-center justify-center space-x-1 cursor-pointer shadow-2xs transition-colors"
-                title="चयनित कारण के छात्रों की पीडीएफ रिपोर्ट डाउनलोड/प्रिव्यू करें"
+                title="चयनित ब्लॉक व कारण के छात्रों की पीडीएफ रिपोर्ट डाउनलोड/प्रिव्यू करें"
               >
                 <FileText className="w-3.5 h-3.5" />
                 <span>PDF विवरण</span>
               </button>
             </div>
 
-            <button
-              onClick={handleExportAllReasonsMultiSheet}
-              className="w-full bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-[11px] font-semibold py-1 px-2 rounded flex items-center justify-center space-x-1.5 cursor-pointer transition-colors"
-              title="डाउनलोड करें सिंगल एक्सेल जिसमें प्रत्येक कारण की अलग शीट हो"
-            >
-              <Layers className="w-3.5 h-3.5 text-amber-700" />
-              <span>ऑल-रीजन मल्टी-शीट Excel</span>
-            </button>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                onClick={handleExportAllReasonsMultiSheet}
+                className="bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-[11px] font-semibold py-1 px-1.5 rounded flex items-center justify-center space-x-1 cursor-pointer transition-colors"
+                title="सिंगल एक्सेल जिसमें प्रत्येक कारण की अलग शीट हो"
+              >
+                <Layers className="w-3 h-3 text-amber-700 shrink-0" />
+                <span className="truncate">ऑल-रीजन शीट</span>
+              </button>
+              <button
+                onClick={handleExportBlockWiseMultiSheet}
+                className="bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-300 text-[11px] font-semibold py-1 px-1.5 rounded flex items-center justify-center space-x-1 cursor-pointer transition-colors"
+                title="सिंगल एक्सेल जिसमें प्रत्येक ब्लॉक की अलग शीट हो"
+              >
+                <Building className="w-3 h-3 text-indigo-700 shrink-0" />
+                <span className="truncate">ऑल-ब्लॉक शीट</span>
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* Card 3C: Block-Wise Reason Matrix Report */}
+        {!isSchoolUser && (
+          <div className="bg-white border-2 border-indigo-300/80 rounded-lg p-4 shadow-2xs flex flex-col justify-between relative overflow-hidden bg-linear-to-b from-indigo-50/40 to-white">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-indigo-900 bg-indigo-100 border border-indigo-200 px-2 py-0.5 rounded uppercase">
+                  Block × Reason Matrix
+                </span>
+                <span className="text-[11px] font-bold text-indigo-900 tabular-nums">
+                  {blockReasonMatrix.totalCount} छात्र
+                </span>
+              </div>
+              <h3 className="text-sm font-bold text-slate-900 mt-2">
+                3C. Block-wise Reason Report
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                चारों ब्लॉकों (दंतेवाड़ा, गीदम, कुआकोंडा, कटेकल्याण) में प्रत्येक कारण के छात्रों का क्रॉस-टैब मैट्रिक्स, सारांश व तुलना।
+              </p>
+            </div>
+
+            <div className="mt-3 pt-3 border-t border-indigo-100 space-y-2">
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={handlePreviewBlockReasonMatrixExcel}
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold py-1.5 px-2 rounded flex items-center justify-center space-x-1 cursor-pointer shadow-2xs transition-colors"
+                  title="ब्लॉक-वार कारण मैट्रिक्स एक्सेल डाउनलोड/प्रिव्यू करें"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  <span>Excel मैट्रिक्स</span>
+                </button>
+                <button
+                  onClick={handlePreviewBlockReasonMatrixPDF}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-1.5 px-2 rounded flex items-center justify-center space-x-1 cursor-pointer shadow-2xs transition-colors"
+                  title="ब्लॉक-वार कारण सारांश पीडीएफ डाउनलोड/प्रिव्यू करें"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>PDF सारांश</span>
+                </button>
+              </div>
+
+              <div className="flex items-center space-x-1.5">
+                <button
+                  onClick={handleExportBlockWiseMultiSheet}
+                  className="flex-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-300 text-[11px] font-semibold py-1 px-2 rounded flex items-center justify-center space-x-1.5 cursor-pointer transition-colors"
+                  title="प्रत्येक ब्लॉक की अलग शीट वाला एक्सेल डाउनलोड करें"
+                >
+                  <Layers className="w-3.5 h-3.5 text-indigo-700" />
+                  <span>ब्लॉक-वार मल्टी-शीट Excel</span>
+                </button>
+                <button
+                  onClick={() => setSelectedReportView('block_reason')}
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-[11px] font-semibold py-1 px-2 rounded flex items-center justify-center space-x-1 cursor-pointer transition-colors"
+                  title="नीचे लाइव टेबल में देखें"
+                >
+                  <Eye className="w-3 h-3 text-slate-600" />
+                  <span>टेबल देखें</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Card 4: Survey Status Report */}
         <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-2xs flex flex-col justify-between">
@@ -1165,6 +1471,17 @@ export const ReportsView: React.FC = () => {
             >
               Reason Breakdown
             </button>
+            {!isSchoolUser && (
+              <button
+                onClick={() => setSelectedReportView('block_reason')}
+                className={`px-3 py-1 rounded-md font-semibold transition-colors cursor-pointer flex items-center space-x-1 ${
+                  selectedReportView === 'block_reason' ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <TableProperties className="w-3.5 h-3.5" />
+                <span>Block × Reason</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -1349,6 +1666,166 @@ export const ReportsView: React.FC = () => {
                     </tbody>
                   </table>
                 </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* View 4: Block × Reason Matrix Table */}
+        {selectedReportView === 'block_reason' && !isSchoolUser && (
+          <div className="space-y-3">
+            {/* Header Action Bar */}
+            <div className="bg-indigo-50/70 border border-indigo-200/80 rounded-lg p-2.5 sm:p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+              <div className="text-xs text-indigo-950 flex items-center space-x-2">
+                <span className="font-bold bg-indigo-200/70 text-indigo-900 px-2 py-0.5 rounded text-[10px] uppercase">
+                  ब्लॉक × कारण मैट्रिक्स (Cross-Tab)
+                </span>
+                <span className="hidden sm:inline text-slate-600">
+                  चारों ब्लॉकों में लंबित कारणों का तुलनात्मक वितरण एवं छात्र संख्या।
+                </span>
+              </div>
+
+              <div className="flex items-center space-x-2 self-start sm:self-auto shrink-0 flex-wrap gap-y-1">
+                <button
+                  onClick={handlePreviewBlockReasonMatrixExcel}
+                  className="inline-flex items-center space-x-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold px-2.5 py-1.5 rounded-md shadow-2xs transition-colors cursor-pointer"
+                  title="ब्लॉक-वार कारण मैट्रिक्स एक्सेल डाउनलोड करें"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  <span>Excel मैट्रिक्स</span>
+                </button>
+                <button
+                  onClick={handlePreviewBlockReasonMatrixPDF}
+                  className="inline-flex items-center space-x-1.5 bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold px-2.5 py-1.5 rounded-md shadow-2xs transition-colors cursor-pointer"
+                  title="ब्लॉक-वार कारण सारांश पीडीएफ डाउनलोड करें"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>PDF सारांश</span>
+                </button>
+                <button
+                  onClick={handleExportBlockWiseMultiSheet}
+                  className="inline-flex items-center space-x-1.5 bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-semibold px-2.5 py-1.5 rounded-md shadow-2xs transition-colors cursor-pointer"
+                  title="प्रत्येक ब्लॉक की अलग शीट वाला एक्सेल"
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>ब्लॉक मल्टी-शीट</span>
+                </button>
+              </div>
+            </div>
+
+            {blockReasonMatrix.rows.length === 0 ? (
+              <div className="py-8 text-center text-slate-400 text-xs">
+                No survey reason data recorded yet.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse min-w-[780px]">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-700 font-semibold">
+                      <th className="py-2.5 px-3 w-10 text-center">क्र.</th>
+                      <th className="py-2.5 px-3">Pending Reason (कारण)</th>
+                      {blockReasonMatrix.distinctBlocks.map((b) => (
+                        <th key={b} className="py-2.5 px-3 text-right">
+                          {b}
+                        </th>
+                      ))}
+                      <th className="py-2.5 px-3 text-right font-bold text-slate-900 bg-slate-100/60">
+                        Total (कुल)
+                      </th>
+                      <th className="py-2.5 px-3 text-right">प्रतिशत %</th>
+                      <th className="py-2.5 px-3 text-right min-w-[150px]">Reports (डाउनलोड)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {blockReasonMatrix.rows.map((r, idx) => (
+                      <tr key={r.reason} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-2.5 px-3 text-center text-slate-400 font-mono text-[11px]">
+                          {idx + 1}
+                        </td>
+                        <td
+                          className="py-2.5 px-3 font-semibold text-slate-900 hover:text-indigo-700 cursor-pointer"
+                          onClick={() => handlePreviewReasonDetailsExcel(r.reason)}
+                          title={`क्लिक करके "${r.reason}" का विस्तृत विवरण देखें`}
+                        >
+                          {r.reason}
+                        </td>
+                        {blockReasonMatrix.distinctBlocks.map((b) => {
+                          const cnt = r.counts[b] || 0;
+                          return (
+                            <td
+                              key={b}
+                              className={`py-2.5 px-3 text-right tabular-nums font-medium ${
+                                cnt > 0
+                                  ? 'text-slate-800 hover:text-indigo-600 hover:underline cursor-pointer'
+                                  : 'text-slate-300'
+                              }`}
+                              onClick={() => {
+                                if (cnt > 0) {
+                                  handlePreviewReasonDetailsExcel(r.reason, b);
+                                }
+                              }}
+                              title={cnt > 0 ? `${b} में "${r.reason}" के ${cnt} छात्र (क्लिक करके विवरण देखें)` : 'शून्य छात्र'}
+                            >
+                              {cnt > 0 ? cnt.toLocaleString('en-IN') : '-'}
+                            </td>
+                          );
+                        })}
+                        <td className="py-2.5 px-3 text-right font-bold text-indigo-900 tabular-nums bg-indigo-50/30">
+                          {r.total.toLocaleString('en-IN')}
+                        </td>
+                        <td className="py-2.5 px-3 text-right text-slate-600 tabular-nums">
+                          {r.percentage}%
+                        </td>
+                        <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end space-x-1">
+                            <button
+                              onClick={() => handlePreviewReasonDetailsExcel(r.reason)}
+                              className="inline-flex items-center space-x-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded text-[11px] font-semibold transition-colors cursor-pointer"
+                              title={`इस कारण के सभी ${r.total} छात्रों की एक्सेल फाइल`}
+                            >
+                              <FileSpreadsheet className="w-3 h-3" />
+                              <span>Excel</span>
+                            </button>
+                            <button
+                              onClick={() => handlePreviewReasonDetailsPDF(r.reason)}
+                              className="inline-flex items-center space-x-1 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-300 px-2 py-0.5 rounded text-[11px] font-semibold transition-colors cursor-pointer"
+                              title={`इस कारण के सभी ${r.total} छात्रों की पीडीएफ फाइल`}
+                            >
+                              <FileText className="w-3 h-3" />
+                              <span>PDF</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-slate-100/90 border-t-2 border-slate-300 font-bold text-slate-900 text-xs">
+                      <td colSpan={2} className="py-2.5 px-3 text-left">
+                        कुल योग (Grand Total)
+                      </td>
+                      {blockReasonMatrix.distinctBlocks.map((b) => (
+                        <td key={b} className="py-2.5 px-3 text-right tabular-nums text-slate-900">
+                          {(blockReasonMatrix.blockTotals[b] || 0).toLocaleString('en-IN')}
+                        </td>
+                      ))}
+                      <td className="py-2.5 px-3 text-right tabular-nums text-indigo-950 font-extrabold bg-indigo-100/60">
+                        {blockReasonMatrix.totalCount.toLocaleString('en-IN')}
+                      </td>
+                      <td className="py-2.5 px-3 text-right tabular-nums">
+                        100%
+                      </td>
+                      <td className="py-2.5 px-3 text-right">
+                        <button
+                          onClick={handlePreviewBlockReasonMatrixExcel}
+                          className="text-[11px] text-indigo-700 hover:text-indigo-900 underline font-semibold cursor-pointer"
+                        >
+                          मैट्रिक्स डाउनलोड
+                        </button>
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
               </div>
             )}
           </div>

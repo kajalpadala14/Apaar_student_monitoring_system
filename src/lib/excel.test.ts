@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as XLSX from 'xlsx';
-import { exportToExcel, exportStudentDetailedReport } from './excel';
+import { exportToExcel, exportStudentDetailedReport, exportBlockWiseReasonMatrixReport, exportBlockWiseMultiSheetReport } from './excel';
 import { Student } from '../types/student';
 
 vi.mock('xlsx', () => {
@@ -100,6 +100,62 @@ describe('excel utility', () => {
       expect(XLSX.writeFile).toHaveBeenCalledWith(
         expect.any(Object),
         expect.stringMatching(/^Dantewada_Survey_\d{4}-\d{2}-\d{2}\.xlsx$/)
+      );
+    });
+  });
+
+  describe('exportBlockWiseReasonMatrixReport', () => {
+    it('creates Block_Reason_Matrix sheet and writes workbook', () => {
+      const matrixData = [
+        { 'Pending Reason': 'नाम में अंतर', DANTEWADA: 10, GEEDAM: 5, Total: 15 }
+      ];
+      exportBlockWiseReasonMatrixReport(matrixData, 'Test_Block_Reason');
+
+      expect(XLSX.utils.json_to_sheet).toHaveBeenCalledWith(matrixData);
+      expect(XLSX.utils.book_append_sheet).toHaveBeenCalledWith(
+        expect.any(Object),
+        expect.any(Object),
+        'Block_Reason_Matrix'
+      );
+      expect(XLSX.writeFile).toHaveBeenCalledWith(
+        expect.any(Object),
+        expect.stringMatching(/^Test_Block_Reason_\d{4}-\d{2}-\d{2}\.xlsx$/)
+      );
+    });
+  });
+
+  describe('exportBlockWiseMultiSheetReport', () => {
+    it('creates summary sheet and one sheet per block with formatted students', () => {
+      const blockGroups = [
+        {
+          block: 'DANTEWADA',
+          students: [
+            {
+              id: 'STU-1',
+              block_name: 'Dantewada',
+              student_pen_number: 'P123',
+              student_name_marksheet: 'Aman'
+            } as any
+          ]
+        }
+      ];
+      const summaryRows = [{ 'Pending Reason': 'नाम में अंतर', DANTEWADA: 1 }];
+
+      exportBlockWiseMultiSheetReport(blockGroups, summaryRows, 'Block_Wise_Full');
+
+      expect(XLSX.utils.book_append_sheet).toHaveBeenCalledWith(
+        expect.any(Object),
+        expect.any(Object),
+        'Matrix_Summary'
+      );
+      expect(XLSX.utils.book_append_sheet).toHaveBeenCalledWith(
+        expect.any(Object),
+        expect.any(Object),
+        'DANTEWADA'
+      );
+      expect(XLSX.writeFile).toHaveBeenCalledWith(
+        expect.any(Object),
+        expect.stringMatching(/^Block_Wise_Full_\d{4}-\d{2}-\d{2}\.xlsx$/)
       );
     });
   });
